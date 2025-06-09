@@ -2,6 +2,8 @@
 
 A simple extension for downloading models directly from [Civitai](https://civitai.com) into your Stable Diffusion WebUI environment.
 
+### Note: Only tested and working on Forge Classic.
+
 ## Features
 
 - View model information and preview images before downloading.
@@ -31,7 +33,8 @@ To download restricted models (XXX) on Civitai requires authentication. To use y
 Downloaded models are saved to the following folders:
 
 - `models/Stable-diffusion/` (Checkpoints)
-- `models/Lora/` (LoRA, LyCORIS, LoCon, LoHa) *Note: LoCon and LyCORIS files are saved into the Lora folder by default, you change this in the settings.*
+- `models/Lora/` (LoRA, LyCORIS, LoCon, LoHa)\
+  *Note: LoCon and LyCORIS files are saved into the Lora folder by default, you change this in the settings.*
 - `models/embeddings/` (Textual Inversion)
 - `models/hypernetworks/` (Hypernetworks)
 - `models/Controlnet/` (ControlNet)
