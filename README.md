@@ -7,7 +7,7 @@ A simple extension for downloading models directly from [Civitai](https://civita
 - View model information and preview images before downloading.
 - Real-time download progress and the ability to cancel downloads.
 - Adds buttons to every model card to open the model page or delete the files.
-- Models are automatically saved in the correct folders (Checkpoints, Lora, LyCORIS, Textual Inversion, Hypernetworks etc.). *Note: I chose to save all LoCon and LyCORIS files into the Lora folder by default, you change this the settings.*
+- Models are automatically saved in the correct folders (Checkpoints, Lora, LyCORIS, Textual Inversion, Hypernetworks etc.).
 - Saves model metadata and preview images alongside the downloaded model file.
 
 ## SD WebUI Installation
@@ -31,12 +31,15 @@ To download restricted models (XXX) on Civitai requires authentication. To use y
 Downloaded models are saved to the following folders:
 
 - `models/Stable-diffusion/` (Checkpoints)
-- `models/Lora/` (LORA, LyCORIS, LoCon, LoHa)
+- `models/Lora/` (LoRA, LyCORIS, LoCon, LoHa) *Note: LoCon and LyCORIS files are saved into the Lora folder by default, you change this in the settings.*
 - `models/embeddings/` (Textual Inversion)
 - `models/hypernetworks/` (Hypernetworks)
+- `models/Controlnet/` (ControlNet)
+- `models/VAE/` (VAE)
+- `models/ESRGAN/` (Upscalers)
 
 Each model downloaded will have accompanying `.metadata.json` and `.preview.jpg/png/webp` files.
 
 ## Support
 
-For issues or feature requests, please open an issue.
+For issues or feature requests, please open an [issue](https://github.com/otacoo/sd-webui-civitai-downloader/issues).
