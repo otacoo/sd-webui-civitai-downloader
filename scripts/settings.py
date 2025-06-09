@@ -43,13 +43,6 @@ def on_ui_settings():
             {"interactive": True, "type": "text"},
             section=section,
         ).info("Default: Lora"),
-        "civitai_folder_loha": shared.OptionInfo(
-            "Lora",
-            "Folder for LoHa models",
-            gr.Textbox,
-            {"interactive": True, "type": "text"},
-            section=section,
-        ).info("Default: Lora"),
         "sep03": OptionDiv(),
         "civitai_disable_card_description": shared.OptionInfo(
             False,

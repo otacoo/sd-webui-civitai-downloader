@@ -29,7 +29,7 @@ def get_model_folders():
         "LORA": os.path.join("models", "Lora"),
         "LyCORIS": os.path.join("models", getattr(shared.opts, "civitai_folder_lycoris", "Lora")),
         "LoCon": os.path.join("models", getattr(shared.opts, "civitai_folder_locon", "Lora")),
-        "LoHa": os.path.join("models", getattr(shared.opts, "civitai_folder_loha", "Lora")),
+        "LoHa": os.path.join("models", "Lora"),
         "DoRA": os.path.join("models", "Lora"),
         "Controlnet": os.path.join("models", "ControlNet"),
         "Upscaler": os.path.join("models", "ESRGAN"),
