@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.1] - 2025-06-09
+- Fix for preview images not considering the correct model ID
+
 ## [1.0.0] - 2024-06-08
 - Initial release of otacoo SD WebUI Civitai Downloader extension.
 - Adds a new tab for Model Downloader.
