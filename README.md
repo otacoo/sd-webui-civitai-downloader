@@ -31,7 +31,7 @@ To download restricted models (XXX) on Civitai requires authentication. To use y
 Downloaded models are saved to the following folders:
 
 - `models/Stable-diffusion/` (Checkpoints)
-- `models/Lora/` (LORA, LyCORIS, LoCON, LoHa)
+- `models/Lora/` (LORA, LyCORIS, LoCon, LoHa)
 - `models/embeddings/` (Textual Inversion)
 - `models/hypernetworks/` (Hypernetworks)
 
