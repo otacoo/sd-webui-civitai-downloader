@@ -510,13 +510,23 @@ def on_ui_tabs():
             api_key = get_civitai_api_key()
             try:
                 model_info = get_civitai_model_info(model_id, api_key=api_key)
-                # Gather all valid preview images
                 SUPPORTED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
                 def is_supported_image(url):
                     ext = os.path.splitext(url.split("?")[0])[1].lower()
                     return ext in SUPPORTED_IMAGE_EXTS
                 urls = []
-                for version in model_info.get("modelVersions", []):
+                # Find the correct version
+                model_versions = model_info.get("modelVersions", [])
+                version = None
+                if model_version_id:
+                    for v in model_versions:
+                        if str(v.get("id")) == str(model_version_id):
+                            version = v
+                            break
+                if not version and model_versions:
+                    version = model_versions[0]
+                # Only collect images from the selected version
+                if version and "images" in version:
                     for image in version.get("images", []):
                         url = image.get("url")
                         if url and is_supported_image(url) and url not in urls:
