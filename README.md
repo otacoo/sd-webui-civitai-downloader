@@ -1,8 +1,10 @@
 # SD WebUI Civitai Model Downloader
 
-A simple extension for downloading models directly from [Civitai](https://civitai.com) into your Stable Diffusion WebUI environment.
+A simple extension for downloading models directly from [Civitai](https://civitai.com) into your Stable Diffusion WebUI environment.\
+I made this for myself because Civitai Helper is always broken and I don't care about most of the features besides downloading and deleting models.
 
 ### Note: Only tested and working on Forge Classic.
+
 
 ## Features
 
@@ -46,3 +48,16 @@ Each model downloaded will have accompanying `.metadata.json` and `.preview.jpg/
 ## Support
 
 For issues or feature requests, please open an [issue](https://github.com/otacoo/sd-webui-civitai-downloader/issues).
+
+## Images
+
+### Model Downloader:
+![Capture](https://github.com/user-attachments/assets/92d3aec3-4193-4daa-80a0-a204fa4040e3)
+
+
+### Model card buttons:
+![Screenshot (906)](https://github.com/user-attachments/assets/09ed8996-a622-41f6-b53c-813a7d7be5e5)
+
+### Settings:
+![Capture2](https://github.com/user-attachments/assets/798e0e4a-744d-4876-80ed-59bdbbc09240)
+
