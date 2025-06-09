@@ -1,0 +1,25 @@
+{
+  "name": "sd-webui-civitai-downloader",
+  "version": "1.0.0",
+  "description": "SD WebUI Civitai Downloader Extension",
+  "keywords": [
+    "civitai",
+    "sd-webui",
+    "downloader"
+  ],
+  "homepage": "https://github.com/otacoo/sd-webui-civitai-downloader",
+  "bugs": {
+    "url": "https://github.com/otacoo/sd-webui-civitai-downloader/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/otacoo/sd-webui-civitai-downloader.git"
+  },
+  "license": "GPL-3.0-only",
+  "author": "otacoo",
+  "type": "commonjs",
+  "main": "javascript/card_buttons.js",
+  "scripts": {
+    "version": "python scripts/update_changelog.py"
+  }
+}
