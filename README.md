@@ -54,12 +54,11 @@ For issues or feature requests, please open an [issue](https://github.com/otacoo
 ## Images
 
 ### Model Downloader:
-![Capture](https://github.com/user-attachments/assets/92d3aec3-4193-4daa-80a0-a204fa4040e3)
+![model_downloader](https://github.com/user-attachments/assets/2cc6ba15-2a0f-481a-9900-95b82f4dec22)
 
 
 ### Model card buttons:
 ![Screenshot (906)](https://github.com/user-attachments/assets/09ed8996-a622-41f6-b53c-813a7d7be5e5)
 
 ### Settings:
-![Capture2](https://github.com/user-attachments/assets/798e0e4a-744d-4876-80ed-59bdbbc09240)
-
+![settings](https://github.com/user-attachments/assets/2aacdd33-5adf-4bf4-a834-176f6febf5e3)
