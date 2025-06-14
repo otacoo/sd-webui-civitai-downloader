@@ -6,10 +6,13 @@ import requests
 import time
 import json
 from urllib.parse import urlparse, parse_qs
-from modules import script_callbacks, shared
-from scripts.backend import metadata
-from scripts.backend import delete_model
+from modules import script_callbacks, shared as _shared
+from scripts.backend.utils import get_model_folders, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
+from scripts.backend import metadata, delete_model
 from scripts.settings import on_ui_settings
+from scripts.backend.check_missing_info import check_missing_info
+from scripts.backend.check_model_updates import check_model_updates
+from scripts.backend.process_control import is_running, get_type, cancel_process
 
 
 def get_package_version():
@@ -22,22 +25,6 @@ def get_package_version():
         return 'unknown'
 
 VERSION = get_package_version()
-
-def get_model_folders():
-    return {
-        "Checkpoint": os.path.join("models", "Stable-diffusion"),
-        "LORA": os.path.join("models", "Lora"),
-        "LyCORIS": os.path.join("models", getattr(shared.opts, "civitai_folder_lycoris", "Lora")),
-        "LoCon": os.path.join("models", getattr(shared.opts, "civitai_folder_locon", "Lora")),
-        "LoHa": os.path.join("models", "Lora"),
-        "DoRA": os.path.join("models", "Lora"),
-        "Controlnet": os.path.join("models", "ControlNet"),
-        "Upscaler": os.path.join("models", "ESRGAN"),
-        "VAE": os.path.join("models", "VAE"),
-        "TextualInversion": os.path.join("models", "embeddings"),
-        "Hypernetwork": os.path.join("models", "hypernetworks"),
-    }
-
 
 def parse_civitai_model_and_version_id(input_str):
     if input_str.strip().isdigit():
@@ -62,21 +49,6 @@ def parse_civitai_model_and_version_id(input_str):
     match_version = re.search(r"modelVersionId=(\d+)", input_str)
     model_version_id = match_version.group(1) if match_version else None
     return model_id, model_version_id
-
-
-def get_civitai_api_key():
-    return getattr(shared.opts, "civitai_api_key", "")
-
-
-def get_civitai_model_info(model_id, api_key=None):
-    api_url = f"https://civitai.com/api/v1/models/{model_id}"
-    headers = {}
-    params = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    resp = requests.get(api_url, headers=headers, params=params)
-    resp.raise_for_status()
-    return resp.json()
 
 
 def get_civitai_first_image_url_from_model_info(model_info, model_version_id=None):
@@ -150,40 +122,6 @@ def get_first_valid_preview_image(model_info, preview_url=None):
             if url and is_supported_image(url):
                 return url
     return None
-
-
-def save_preview_and_metadata(folder, filename, model_info, preview_url=None):
-    """
-    Save the preview image (only jpg, jpeg, png, webp) and model metadata JSON next to the model file.
-    If preview_url is not provided or is not a supported image, will try to find the first valid image from model_info.
-    """
-    # Save metadata
-    base_path = os.path.join(folder, os.path.splitext(filename)[0])
-    metadata_path = base_path + ".metadata.json"
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        json.dump(model_info, f, ensure_ascii=False, indent=2)
-
-    # Use helper to find valid preview image
-    image_url = get_first_valid_preview_image(model_info, preview_url)
-
-    # Save preview image if found
-    if image_url:
-        ext = os.path.splitext(image_url.split("?")[0])[1]
-        if not ext or len(ext) > 5:
-            ext = ".jpg"
-        preview_path = base_path + f".preview{ext}"
-        try:
-            resp = robust_get(image_url, stream=True)
-            resp.raise_for_status()
-            with open(preview_path, "wb") as imgf:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        imgf.write(chunk)
-        except Exception as e:
-            print(f"Failed to download preview image: {e}")
-    else:
-        print("No valid preview image found; skipping preview download.")
-
 
 def robust_get(url, headers=None, stream=False, timeout=15, max_retries=5):
     last_exc = None
@@ -263,9 +201,6 @@ def download_civitai_model_with_progress(
 
     # Sanitize filename: keep only a-z, A-Z, 0-9, - and _
     def sanitize_filename(filename):
-        import os
-        import re
-
         base, ext = os.path.splitext(filename)
         base = re.sub(r"\s+", "-", base)
         base = re.sub(r"[^a-zA-Z0-9\-_]", "", base)
@@ -412,18 +347,12 @@ def download_model(model_state, progress=gr.Progress()):
 
 
 def on_ui_tabs():
-    import gradio as gr
-    import os
-    import json
-
     with gr.Blocks(analytics_enabled=False) as ui_component:
         # Hidden components for JS-triggered alerts
         js_alert_box = gr.Textbox(visible=False, elem_id="js_alert_box")
         js_alert_btn = gr.Button(visible=False, elem_id="js_alert_btn")
 
         def js_alert_py(msg_and_type):
-            import json
-
             try:
                 data = json.loads(msg_and_type)
                 msg = data.get("message", "")
@@ -439,7 +368,6 @@ def on_ui_tabs():
                 return gr.Info(msg)
 
         js_alert_btn.click(js_alert_py, inputs=[js_alert_box], outputs=[])
-        from modules import shared as _shared
         extra_css = ""
         if getattr(_shared.opts, "civitai_disable_card_description", False):
             extra_css = """
@@ -458,6 +386,11 @@ def on_ui_tabs():
         #ota_progress > .wrap.full {{
             display: none !important;
         }}
+        #ota_textbox {{
+            border: var(--input-border-width) solid var(--input-border-color);
+            border-radius: var(--input-radius);
+            padding: 5px 0 5px 10px;
+        }}
         </style>
         {extra_css}
         """
@@ -471,7 +404,12 @@ def on_ui_tabs():
                     scale=4,
                     elem_id="model_url_input",
                 )
-                check_btn = gr.Button("Check Model", variant="secondary")
+                with gr.Row():
+                    check_btn = gr.Button("Check Model", variant="secondary")
+                gr.Markdown("#### Info Tools")
+                with gr.Row():
+                    check_missing_btn = gr.Button("Check models for missing info (preview, metadata)", variant="secondary")
+                    check_updates_btn = gr.Button("Check for model updates", variant="secondary")
 
                 gr.Markdown("#### Download Controls")
                 with gr.Row():
@@ -481,9 +419,7 @@ def on_ui_tabs():
                     )
 
                 progress_label = gr.Label(label="Progress", elem_id="ota_progress")
-                output = gr.Textbox(
-                    label="Output", interactive=False, lines=2, elem_id="ota_textbox"
-                )
+                output = gr.Markdown(label="Output", elem_id="ota_textbox")
 
             with gr.Column(variant="panel"):
                 gr.Markdown("#### Model Preview & Info")
@@ -552,16 +488,52 @@ def on_ui_tabs():
             return img1, img2, info_text, state, gr.update(interactive=download_enabled)
 
         def cancel_download(state):
-            if state and state[0]:
+            cancelled = False
+            # Cancel model download if running
+            if state and state[0] and not DOWNLOAD_CANCEL_FLAGS.get(state[0], False):
                 DOWNLOAD_CANCEL_FLAGS[state[0]] = True
-                return "Cancelling...", "Cancelling..."
-            return "Nothing to cancel.", "Nothing to cancel."
+                cancelled = True
+            # Cancel any backend process if running
+            try:
+                if is_running():
+                    cancel_process()
+                    cancelled = True
+            except Exception:
+                pass
+            if cancelled:
+                return gr.Label.update(value=""), "Cancelling..."
+            else:
+                return gr.Label.update(value=""), "Nothing to cancel."
 
         # --- Button bindings ---
         check_btn.click(
             fn=check_and_update,
             inputs=[model_url],
             outputs=[preview1, preview2, info, model_state, download_btn],
+        )
+        def check_missing_info_or_cancel():
+            if is_running():
+                cancel_process()
+                yield "Stopping current process..."
+                return
+            yield from check_missing_info()
+
+        def check_model_updates_or_cancel():
+            if is_running():
+                cancel_process()
+                yield "Stopping current process..."
+                return
+            yield from check_model_updates()
+
+        check_missing_btn.click(
+            fn=check_missing_info_or_cancel,
+            inputs=[],
+            outputs=[output],
+        )
+        check_updates_btn.click(
+            fn=check_model_updates_or_cancel,
+            inputs=[],
+            outputs=[output],
         )
         download_btn.click(
             fn=download_model,
