@@ -10,6 +10,8 @@ I made this for myself because Civitai Helper is always broken and I don't care 
 
 - View model information and preview images before downloading.
 - Real-time download progress and the ability to cancel downloads.
+- Check for new versions of existing models.
+- Check and download missing model info like preview images or metadata.
 - Adds buttons to every model card to open the model page or delete the files.
 - Models are automatically saved in the correct folders (Checkpoints, Lora, LyCORIS, Textual Inversion, Hypernetworks etc.).
 - Saves model metadata and preview images alongside the downloaded model file.

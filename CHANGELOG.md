@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.0] - 2025-06-14
+- Add a button to check for missing info (preview image, metadata file)
+- Add a button to check for model updates
+
 ## [1.0.1] - 2025-06-09
 - Fix for preview images not considering the correct model ID
 
