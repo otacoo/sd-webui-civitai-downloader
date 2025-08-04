@@ -195,7 +195,20 @@ def download_civitai_model_with_progress(
             return
 
     model_type = data.get("type", "Checkpoint")
-    file_info = version["files"][0]
+    valid_extensions = {".safetensors", ".pth", ".ckpt"}
+    model_files = [
+        f for f in version["files"]
+        if any(f["name"].lower().endswith(ext) for ext in valid_extensions)
+    ]
+
+    if not model_files:
+        DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
+        yield gr.Label.update(value="Error"), gr.Textbox.update(
+            value="No valid model file found for this version."
+        )
+        return
+
+    file_info = model_files[0]
     download_url = file_info["downloadUrl"]
     filename = file_info["name"]
 
