@@ -55,8 +55,7 @@ For issues or feature requests, please open an [issue](https://github.com/otacoo
 ## Images
 
 ### Model Downloader:
-![model_downloader](https://github.com/user-attachments/assets/2cc6ba15-2a0f-481a-9900-95b82f4dec22)
-
+![model_downloader](https://github.com/user-attachments/assets/fbba0452-d5b1-469d-a270-acb72dfee49d)
 
 ### Model card buttons:
 ![Screenshot (906)](https://github.com/user-attachments/assets/09ed8996-a622-41f6-b53c-813a7d7be5e5)
