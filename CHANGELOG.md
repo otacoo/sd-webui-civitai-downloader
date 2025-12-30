@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.2] - 2025-12-30
+- Add option to pick which preview image to use as thumbnail when downloading a model
+
 ## [1.1.1] - 2025-08-04
 - Downloader will now filter for .safetensors, .pth or .ckpt files to avoid downloading the wrong file
 

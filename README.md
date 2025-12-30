@@ -9,6 +9,7 @@ I made this for myself because Civitai Helper is always broken and I don't care 
 ## Features
 
 - View model information and preview images before downloading.
+- Pick between preview images to use as thumbnail.
 - Real-time download progress and the ability to cancel downloads.
 - Check for new versions of existing models.
 - Check and download missing model info like preview images or metadata.
