@@ -147,7 +147,7 @@ def cancel_download(model_id):
 
 
 def download_civitai_model_with_progress(
-    model_id, model_version_id=None, progress=gr.Progress()
+    model_id, model_version_id=None, progress=gr.Progress(), selected_preview_url=None
 ):
     """
     The cancel button should set DOWNLOAD_CANCEL_FLAGS[model_id] = True.
@@ -230,8 +230,9 @@ def download_civitai_model_with_progress(
         msg = f"Model already exists: {dest_path}"
         print(msg)
         # Still save metadata and preview if missing
-        preview_url = None
-        if "images" in version and version["images"]:
+        # Use selected preview URL if provided, otherwise fall back to first image
+        preview_url = selected_preview_url
+        if not preview_url and "images" in version and version["images"]:
             preview_url = version["images"][0]["url"]
         save_preview_and_metadata(folder, filename, data, preview_url)
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
@@ -330,8 +331,9 @@ def download_civitai_model_with_progress(
             print(f"\nDownloaded to {dest_path}")
 
         # After download, save preview and metadata
-        preview_url = None
-        if "images" in version and version["images"]:
+        # Use selected preview URL if provided, otherwise fall back to first image
+        preview_url = selected_preview_url
+        if not preview_url and "images" in version and version["images"]:
             preview_url = version["images"][0]["url"]
         save_preview_and_metadata(folder, filename, data, preview_url)
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
@@ -346,16 +348,31 @@ def download_civitai_model_with_progress(
         )
 
 
-def download_model(model_state, progress=gr.Progress()):
+def download_model(model_state, preview_urls_state, preview_selection, progress=gr.Progress()):
     # model_state: (model_id, model_version_id)
+    # preview_urls_state: (preview1_url, preview2_url)
     if not model_state or not model_state[0]:
         yield gr.Label.update(value="Error"), gr.Textbox.update(
             value="No model checked. Please check the model first."
         )
         return
     model_id, model_version_id = model_state
+    # Determine which preview URL to use
+    selected_preview_url = None
+    if preview_urls_state:
+        preview1_url, preview2_url = preview_urls_state
+        if preview_selection == "Preview 1" and preview1_url:
+            selected_preview_url = preview1_url
+        elif preview_selection == "Preview 2" and preview2_url:
+            selected_preview_url = preview2_url
+        # Fallback to preview1 if preview2 is selected but not available
+        elif preview_selection == "Preview 2" and preview1_url:
+            selected_preview_url = preview1_url
+        elif preview1_url:
+            selected_preview_url = preview1_url
+    
     yield from download_civitai_model_with_progress(
-        model_id, model_version_id, progress
+        model_id, model_version_id, progress, selected_preview_url
     )
 
 
@@ -443,9 +460,17 @@ def on_ui_tabs():
                     preview2 = gr.Image(
                         label="Preview 2", interactive=False, height=512, fill_width=True
                     )
+                preview_selection = gr.Radio(
+                    label="Select Thumbnail Preview",
+                    choices=["Preview 1", "Preview 2"],
+                    value="Preview 1",
+                    interactive=True,
+                    info="Choose which preview image to use as the thumbnail when downloading"
+                )
                 info = gr.Textbox(label="Model Info", interactive=False, lines=6)
 
         model_state = gr.State(value=None)
+        preview_urls_state = gr.State(value=None)  # Store (preview1_url, preview2_url)
         gr.Markdown(
             f"<div style='text-align:center; color:gray;'>"
             f"<center><b>Civitai Model Downloader — v{VERSION} — otacoo</b></center>"
@@ -497,8 +522,9 @@ def on_ui_tabs():
         def check_and_update(url):
             img1, img2, model_id, model_version_id, info_text = get_first_two_preview_images(url)
             state = (model_id, model_version_id) if model_id else None
+            preview_urls = (img1, img2) if model_id else None
             download_enabled = bool(model_id)
-            return img1, img2, info_text, state, gr.update(interactive=download_enabled)
+            return img1, img2, info_text, state, preview_urls, gr.update(interactive=download_enabled)
 
         def cancel_download(state):
             cancelled = False
@@ -522,7 +548,7 @@ def on_ui_tabs():
         check_btn.click(
             fn=check_and_update,
             inputs=[model_url],
-            outputs=[preview1, preview2, info, model_state, download_btn],
+            outputs=[preview1, preview2, info, model_state, preview_urls_state, download_btn],
         )
         def check_missing_info_or_cancel():
             if is_running():
@@ -550,7 +576,7 @@ def on_ui_tabs():
         )
         download_btn.click(
             fn=download_model,
-            inputs=[model_state],
+            inputs=[model_state, preview_urls_state, preview_selection],
             outputs=[progress_label, output],
         )
         cancel_btn.click(
