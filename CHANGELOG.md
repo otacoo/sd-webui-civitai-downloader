@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.3] - 2026-01-11
+- Populate SD WebUI info file with the model's activation words and description when downloading a model
+
 ## [1.1.2] - 2025-12-30
 - Add option to pick which preview image to use as thumbnail when downloading a model
 
