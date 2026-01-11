@@ -106,7 +106,7 @@ def check_missing_info():
                 preview_url = None
                 if model_version_info.get('images'):
                     preview_url = model_version_info['images'][0]['url']
-                save_preview_and_metadata(abs_folder, file, model_info, preview_url)
+                save_preview_and_metadata(abs_folder, file, model_info, preview_url, model_version_info)
                 msg = f"Fixed: {file} ({', '.join(missing)})"
                 print(msg)
                 summary.append(msg)

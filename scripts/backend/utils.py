@@ -33,7 +33,59 @@ def get_civitai_model_info(model_id, api_key=None):
     resp.raise_for_status()
     return resp.json()
 
-def save_preview_and_metadata(folder, filename, model_info, preview_url=None):
+def save_model_info_json(folder, filename, model_info, model_version=None):
+    """
+    Save or update the .json file used by SD WebUI to populate model info.
+    Extracts trainedWords (activation words) and description from metadata.
+    """
+    base_path = os.path.join(folder, os.path.splitext(filename)[0])
+    json_path = base_path + ".json"
+    
+    # Extract trainedWords from model version
+    trained_words = []
+    if model_version and "trainedWords" in model_version:
+        trained_words = model_version.get("trainedWords", [])
+    
+    # Extract description from model info
+    description = model_info.get("description", "")
+    
+    # Format activation_text: join trainedWords with commas and add trailing comma
+    activation_text = ", ".join(trained_words) + "," if trained_words else ""
+    
+    # Load existing .json file if it exists, otherwise create default structure
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+        except Exception as e:
+            print(f"Failed to read existing .json file: {e}, creating new one")
+            existing_data = {}
+    else:
+        existing_data = {}
+    
+    # Update with new data, preserving existing fields if they exist
+    existing_data["description"] = description
+    existing_data["activation text"] = activation_text
+    
+    # Ensure required fields exist with defaults if not present
+    if "sd version" not in existing_data:
+        existing_data["sd version"] = ""
+    if "preferred weight" not in existing_data:
+        existing_data["preferred weight"] = 0
+    if "negative text" not in existing_data:
+        existing_data["negative text"] = ""
+    if "notes" not in existing_data:
+        existing_data["notes"] = ""
+    
+    # Save the updated .json file
+    try:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(existing_data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Failed to save .json file: {e}")
+
+
+def save_preview_and_metadata(folder, filename, model_info, preview_url=None, model_version=None):
     """
     Save the preview image (only jpg, jpeg, png, webp) and model metadata JSON next to the model file.
     If preview_url is not provided or is not a supported image, will try to find the first valid image from model_info.
@@ -79,3 +131,6 @@ def save_preview_and_metadata(folder, filename, model_info, preview_url=None):
             print(f"Failed to download preview image: {e}")
     else:
         print("No valid preview image found; skipping preview download.")
+    
+    # Save .json file with activation words and description
+    save_model_info_json(folder, filename, model_info, model_version)

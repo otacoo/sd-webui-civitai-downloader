@@ -234,7 +234,7 @@ def download_civitai_model_with_progress(
         preview_url = selected_preview_url
         if not preview_url and "images" in version and version["images"]:
             preview_url = version["images"][0]["url"]
-        save_preview_and_metadata(folder, filename, data, preview_url)
+        save_preview_and_metadata(folder, filename, data, preview_url, version)
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
         yield gr.Label.update(value=msg), gr.Textbox.update(value=msg)
         return
@@ -335,7 +335,7 @@ def download_civitai_model_with_progress(
         preview_url = selected_preview_url
         if not preview_url and "images" in version and version["images"]:
             preview_url = version["images"][0]["url"]
-        save_preview_and_metadata(folder, filename, data, preview_url)
+        save_preview_and_metadata(folder, filename, data, preview_url, version)
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
         yield gr.Label.update(value="Done"), gr.Textbox.update(
             value=f"Downloaded Civitai {model_type} model to: {dest_path}"
