@@ -13,6 +13,13 @@ def on_ui_settings():
             {"interactive": True, "type": "text"},
             section=section,
         ).info("For downloading restricted models."),
+        "civitai_preferred_domain": shared.OptionInfo(
+            "civitai.red",
+            "Preferred Civitai domain",
+            gr.Radio,
+            {"choices": ["civitai.com", "civitai.red"], "interactive": True},
+            section=section,
+        ).info("Choose which domain to use for all Civitai API and page links."),
         "sep00": OptionDiv(),
         "civitai_card_button_open_url": shared.OptionInfo(
             True,
@@ -45,12 +52,19 @@ def on_ui_settings():
         ).info("Default: Lora"),
         "sep03": OptionDiv(),
         "civitai_disable_card_description": shared.OptionInfo(
-            False,
+            True,
             "Disable card description",
             gr.Checkbox,
             {"interactive": True},
             section=section,
-        ).info("Hides description on model cards."),
+        ).info("Hides description on model cards. Requires a restart."),
+        "civitai_show_model_title_on_card": shared.OptionInfo(
+            False,
+            "Show model title instead of filename",
+            gr.Checkbox,
+            {"interactive": True},
+            section=section,
+        ).info("Use the model's title (from metadata) as the card title instead of the filename. Note: Search will still use the filenames. Requires a restart."),
     }
     for opt_name, opt_info in options.items():
         # Ensure OptionDiv has a section attribute set

@@ -23,15 +23,33 @@ def get_model_folders():
 def get_civitai_api_key():
     return getattr(shared.opts, "civitai_api_key", "")
 
+def get_civitai_domains():
+    """Returns [preferred_domain, fallback_domain] based on the user's setting."""
+    preferred = getattr(shared.opts, "civitai_preferred_domain", "civitai.red") or "civitai.red"
+    if preferred not in ("civitai.com", "civitai.red"):
+        preferred = "civitai.red"
+    fallback = "civitai.red" if preferred == "civitai.com" else "civitai.com"
+    return [preferred, fallback]
+
 def get_civitai_model_info(model_id, api_key=None):
-    api_url = f"https://civitai.com/api/v1/models/{model_id}"
     headers = {}
     params = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    resp = requests.get(api_url, headers=headers, params=params)
-    resp.raise_for_status()
-    return resp.json()
+    last_exc = None
+    for domain in get_civitai_domains():
+        try:
+            resp = requests.get(f"https://{domain}/api/v1/models/{model_id}", headers=headers, params=params)
+            if resp.status_code == 404:
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            last_exc = e
+            continue
+    if last_exc:
+        raise last_exc
+    return None
 
 def save_model_info_json(folder, filename, model_info, model_version=None):
     """
