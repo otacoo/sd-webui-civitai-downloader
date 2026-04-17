@@ -9,16 +9,20 @@ def get_latest_model_info(model_id, api_key=None):
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     last_exc = None
+    got_404 = False
     for domain in get_civitai_domains():
         try:
             resp = requests.get(f"https://{domain}/api/v1/models/{model_id}", headers=headers)
             if resp.status_code == 404:
+                got_404 = True
                 continue
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
             last_exc = e
             continue
+    if got_404 and last_exc is None:
+        raise ValueError(f"Model {model_id} not found on Civitai (404)")
     if last_exc:
         raise last_exc
     return None
