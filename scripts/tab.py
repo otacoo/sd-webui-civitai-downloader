@@ -5,7 +5,7 @@ import re
 import requests
 import time
 import json
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlunparse
 from modules import script_callbacks, shared as _shared
 from scripts.backend.utils import get_model_folders, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
 from scripts.backend import metadata, delete_model
@@ -34,8 +34,6 @@ def parse_civitai_model_and_version_id(input_str):
         if parsed.netloc in [
             "civitai.com",
             "www.civitai.com",
-            "civitai.green",
-            "www.civitai.green",
             "civitai.red",
             "www.civitai.red",
         ]:
@@ -46,7 +44,7 @@ def parse_civitai_model_and_version_id(input_str):
             return model_id, model_version_id
     except Exception:
         pass
-    match = re.search(r"civitai\.(?:com|green|red)/models/(\d+)", input_str)
+    match = re.search(r"civitai\.(?:com|red)/models/(\d+)", input_str)
     model_id = match.group(1) if match else None
     match_version = re.search(r"modelVersionId=(\d+)", input_str)
     model_version_id = match_version.group(1) if match_version else None
@@ -245,8 +243,25 @@ def download_civitai_model_with_progress(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
+    # Always use civitai.com for file downloads, seems civitai.red does not support downloads atm.
     try:
-        with robust_get(download_url, headers=headers, stream=True) as r:
+        parsed_dl = urlparse(download_url)
+        host_dl = parsed_dl.netloc or ""
+        if "civitai.red" in host_dl:
+            host_dl = host_dl.replace("civitai.red", "civitai.com")
+            download_url = urlunparse(parsed_dl._replace(netloc=host_dl))
+            print(f"Normalizing download URL to civitai.com: {download_url}")
+    except Exception:
+        pass
+
+    try:
+        r = None
+        try:
+            r = robust_get(download_url, headers=headers, stream=True)
+        except Exception as e:
+            raise
+
+        with r as r:
             r.raise_for_status()
             total = int(r.headers.get("content-length", 0))
             chunk_size = 8192 * 4  # 32KB

@@ -1,7 +1,7 @@
 import os
 import hashlib
 import requests
-from .utils import get_model_folders, get_civitai_api_key, save_preview_and_metadata
+from .utils import get_model_folders, get_civitai_api_key, get_civitai_domains, save_preview_and_metadata
 from .process_control import is_running, set_running, clear_running, cancel_process, is_cancelled, get_type
 
 def sha256_of_file(filepath):
@@ -12,15 +12,21 @@ def sha256_of_file(filepath):
     return h.hexdigest()
 
 def get_model_info_by_hash(file_hash, api_key=None):
-    url = f"https://civitai.com/api/v1/model-versions/by-hash/{file_hash}"
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    resp = requests.get(url, headers=headers)
-    if resp.status_code == 404:
-        return None  # Not found
-    resp.raise_for_status()
-    return resp.json()
+    last_exc = None
+    for domain in get_civitai_domains():
+        try:
+            resp = requests.get(f"https://{domain}/api/v1/model-versions/by-hash/{file_hash}", headers=headers)
+            if resp.status_code == 404:
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            last_exc = e
+            continue
+    return None  # Not found on any domain
 
 def cancel_check_missing_info():
     cancel_process()

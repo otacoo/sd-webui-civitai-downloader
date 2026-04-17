@@ -21,6 +21,8 @@
     }
 
     function getModelPath(card) {
+        // Use cached path if available
+        if (card.dataset.civitaiModelPath) return card.dataset.civitaiModelPath;
         const searchTerm = card.querySelector('.actions .additional .search_terms');
         if (searchTerm) return searchTerm.textContent.trim();
         const searchTerm2 = card.querySelector('.actions .additional .search_term');
@@ -42,104 +44,105 @@
     }
 
     function processCard(card) {
-        if (card.querySelector('.custom-card-buttons')) return;
-        const actions = card.querySelector('.actions');
-        const BUTTONS_HTML = getButtonsHtml();
-        if (actions) {
-            actions.insertAdjacentHTML('beforebegin', BUTTONS_HTML);
-        } else {
-            card.insertAdjacentHTML('beforeend', BUTTONS_HTML);
-        }
-        const btns = card.querySelector('.custom-card-buttons');
+        const alreadyHasButtons = !!card.querySelector('.custom-card-buttons');
 
-        const urlBtn = btns.querySelector('.open-url-btn');
-        const delBtn = btns.querySelector('.delete-btn');
+        if (!alreadyHasButtons) {
+            const actions = card.querySelector('.actions');
+            const BUTTONS_HTML = getButtonsHtml();
+            if (actions) {
+                actions.insertAdjacentHTML('beforebegin', BUTTONS_HTML);
+            } else {
+                card.insertAdjacentHTML('beforeend', BUTTONS_HTML);
+            }
 
-        if (urlBtn) {
-            urlBtn.onclick = async function (e) {
-                e.stopPropagation();
-                e.preventDefault();
-                const searchTerm = card.querySelector('.actions .additional .search_terms');
-                let modelPath = searchTerm ? searchTerm.textContent.trim() : null;
-                if (!modelPath) {
-                    notifySDWebUI("Could not determine model path for info page.", "error");
-                    return;
-                }
-                let metadataPath = modelPath.replace(/\.[^/.]+$/, '.metadata.json').replace(/\\/g, '/');
-                // Ensure the path starts with 'models/'
-                if (!metadataPath.startsWith('models/')) {
-                    metadataPath = 'models/' + metadataPath;
-                }
-                let metadataUrl = `/sd-webui-model-downloader/api/metadata?path=${encodeURIComponent(metadataPath)}`;
-                try {
-                    let resp = await fetch(metadataUrl);
-                    if (!resp.ok) throw new Error("Metadata not found");
-                    let metadata = await resp.json();
-                    let domain = "civitai.com";
-                    let modelId = null;
-                    if (metadata.civitai && metadata.civitai.modelId) {
-                        modelId = metadata.civitai.modelId; // Old format (Civitai Helper)
-                    } else if (metadata.civitai && metadata.civitai.id) {
-                        modelId = metadata.civitai.id; // New format, but this is version/file ID
-                    } else if (metadata.id) {
-                        modelId = metadata.id;
+            const btns = card.querySelector('.custom-card-buttons');
+            const urlBtn = btns.querySelector('.open-url-btn');
+            const delBtn = btns.querySelector('.delete-btn');
+
+            if (urlBtn) {
+                urlBtn.onclick = async function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    let modelPath = getModelPath(card);
+                    if (!modelPath) {
+                        notifySDWebUI("Could not determine model path for info page.", "error");
+                        return;
                     }
-                    if (!modelId) throw new Error("No model id in metadata");
-                    // Optionally extract domain from downloadUrl if present and desired
-                    if (metadata.downloadUrl) {
-                        let m = metadata.downloadUrl.match(/^https?:\/\/([^/]+)/);
-                        if (m) {
-                            // Only allow civitai.com, civitai.green or civitai.red
-                            if (m[1] === "civitai.com" || m[1] === "civitai.green" || m[1] === "civitai.red") {
-                                domain = m[1];
-                            } else {
-                                domain = "civitai.com";
-                            }
+                    let metadataPath = modelPath.replace(/\.[^/.]+$/, '.metadata.json').replace(/\\/g, '/');
+                    if (!metadataPath.startsWith('models/')) metadataPath = 'models/' + metadataPath;
+                    const domain = (typeof opts !== 'undefined' && opts.civitai_preferred_domain)
+                        ? opts.civitai_preferred_domain : 'civitai.com';
+                    try {
+                        let resp = await fetch(`/sd-webui-model-downloader/api/metadata?path=${encodeURIComponent(metadataPath)}`);
+                        if (!resp.ok) throw new Error("Metadata not found");
+                        let metadata = await resp.json();
+                        let modelId = null;
+                        if (metadata.civitai && metadata.civitai.modelId) {
+                            modelId = metadata.civitai.modelId;
+                        } else if (metadata.civitai && metadata.civitai.id) {
+                            modelId = metadata.civitai.id;
+                        } else if (metadata.id) {
+                            modelId = metadata.id;
                         }
+                        if (!modelId) throw new Error("No model id in metadata");
+                        window.open(`https://${domain}/models/${modelId}/`, "_blank");
+                    } catch (err) {
+                        notifySDWebUI("Failed to open model info page: " + err.message, "error");
                     }
-                    let infoUrl = `https://${domain}/models/${modelId}/`;
-                    window.open(infoUrl, "_blank");
-                } catch (err) {
-                    notifySDWebUI("Failed to open model info page: " + err.message, "error");
-                }
-            };
+                };
+            }
+            if (delBtn) {
+                delBtn.onclick = async function (e) {
+                    stopEvent(e);
+                    let rm_confirm = "\nDo you really want to remove this model and all related files? This process is irreversible.";
+                    if (!confirm(rm_confirm)) return false;
+                    const modelPath = getModelPath(card);
+                    if (!modelPath) {
+                        notifySDWebUI("Could not determine model path for deletion.", "error");
+                        return false;
+                    }
+                    let apiModelPath = modelPath.replace(/\\/g, '/');
+                    if (!apiModelPath.startsWith('models/')) apiModelPath = 'models/' + apiModelPath;
+                    try {
+                        const resp = await fetch('/sd-webui-model-downloader/api/delete_model', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ model_path: apiModelPath })
+                        });
+                        const result = await resp.json();
+                        if (resp.ok && result.success) {
+                            notifySDWebUI(result.message || 'Model deleted successfully.', 'info');
+                            card.remove();
+                        } else {
+                            notifySDWebUI(result.error || 'Failed to delete model.', 'error');
+                        }
+                    } catch (err) {
+                        notifySDWebUI('Failed to delete model: ' + err.message, 'error');
+                    }
+                    return false;
+                };
+            }
         }
-        if (delBtn) {
-            delBtn.onclick = async function (e) {
-                stopEvent(e);
-                let rm_confirm = "\nDo you really want to remove this model and all related files? This process is irreversible.";
-                if (!confirm(rm_confirm)) {
-                    return false;
-                }
+
+        // Title replacement: run every time so it applies even if opts weren't ready on first pass
+        if (typeof opts !== 'undefined' && opts.civitai_show_model_title_on_card && !card.dataset.civitaiTitleSet) {
+            card.dataset.civitaiTitleSet = '1';
+            (async () => {
                 const modelPath = getModelPath(card);
-                if (!modelPath) {
-                    notifySDWebUI("Could not determine model path for deletion.", "error");
-                    return false;
-                }
-                // Ensure the path starts with 'models/'
-                let apiModelPath = modelPath.replace(/\\/g, '/');
-                if (!apiModelPath.startsWith('models/')) {
-                    apiModelPath = 'models/' + apiModelPath;
-                }
+                if (!modelPath) return;
+                let metadataPath = modelPath.replace(/\.[^/.]+$/, '.metadata.json').replace(/\\/g, '/');
+                if (!metadataPath.startsWith('models/')) metadataPath = 'models/' + metadataPath;
                 try {
-                    const resp = await fetch('/sd-webui-model-downloader/api/delete_model', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ model_path: apiModelPath })
-                    });
-                    const result = await resp.json();
-                    if (resp.ok && result.success) {
-                        notifySDWebUI(result.message || 'Model deleted successfully.', 'info');
-                        // Remove the card from the UI
-                        card.remove();
-                    } else {
-                        notifySDWebUI(result.error || 'Failed to delete model.', 'error');
-                    }
-                } catch (err) {
-                    notifySDWebUI('Failed to delete model: ' + err.message, 'error');
-                }
-                return false;
-            };
+                    const resp = await fetch(`/sd-webui-model-downloader/api/metadata?path=${encodeURIComponent(metadataPath)}`);
+                    if (!resp.ok) return;
+                    const metadata = await resp.json();
+                    const modelName = metadata && metadata.name ? metadata.name : null;
+                    if (!modelName) return;
+                    // span.name is the confirmed title element in Forge/A1111
+                    const titleEl = card.querySelector('span.name');
+                    if (titleEl) titleEl.textContent = modelName;
+                } catch (e) { /* ignore */ }
+            })();
         }
     }
 
@@ -158,6 +161,16 @@
         gradioApp().addEventListener('click', function () {
             setTimeout(processVisibleCards, 100);
         }, true);
+
+        // Watch for DOM changes so buttons appear as soon as cards are rendered
+        let observerTimeout = null;
+        const observer = new MutationObserver(function (mutationsList) {
+            if (observerTimeout) clearTimeout(observerTimeout);
+            observerTimeout = setTimeout(() => {
+                processVisibleCards();
+            }, 150);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
 
         const style = document.createElement('style');
         style.textContent = `

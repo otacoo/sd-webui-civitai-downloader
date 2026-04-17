@@ -1,17 +1,27 @@
 import os
 import requests
 import json
-from .utils import get_model_folders, get_civitai_api_key
+from .utils import get_model_folders, get_civitai_api_key, get_civitai_domains
 from .process_control import is_running, set_running, clear_running, cancel_process, is_cancelled, get_type
 
 def get_latest_model_info(model_id, api_key=None):
-    url = f"https://civitai.com/api/v1/models/{model_id}"
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
+    last_exc = None
+    for domain in get_civitai_domains():
+        try:
+            resp = requests.get(f"https://{domain}/api/v1/models/{model_id}", headers=headers)
+            if resp.status_code == 404:
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            last_exc = e
+            continue
+    if last_exc:
+        raise last_exc
+    return None
 
 def cancel_check_model_updates():
     cancel_process()
@@ -92,8 +102,9 @@ def check_model_updates():
                     continue
                 # New version available (Markdown link)
                 model_name = latest_info.get('name', f'Model {model_id}')
-                url = f"https://civitai.com/models/{model_id}?modelVersionId={latest_version_id}"
-                update_msg = f"NEW VERSION of {model_name} available: [Open in browser]({url})"
+                domain = get_civitai_domains()[0]
+                url = f"https://{domain}/models/{model_id}?modelVersionId={latest_version_id}"
+                update_msg = f"NEW VERSION of {model_name} available: [[Open in browser]]({url})"
                 updates.append(update_msg)
                 yield '\n\n'.join(updates + errors)
             except Exception as e:
