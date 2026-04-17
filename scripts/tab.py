@@ -36,6 +36,8 @@ def parse_civitai_model_and_version_id(input_str):
             "www.civitai.com",
             "civitai.green",
             "www.civitai.green",
+            "civitai.red",
+            "www.civitai.red",
         ]:
             match = re.match(r"^/models/(\d+)", parsed.path)
             model_id = match.group(1) if match else None
@@ -44,7 +46,7 @@ def parse_civitai_model_and_version_id(input_str):
             return model_id, model_version_id
     except Exception:
         pass
-    match = re.search(r"civitai\.(?:com|green)/models/(\d+)", input_str)
+    match = re.search(r"civitai\.(?:com|green|red)/models/(\d+)", input_str)
     model_id = match.group(1) if match else None
     match_version = re.search(r"modelVersionId=(\d+)", input_str)
     model_version_id = match_version.group(1) if match_version else None

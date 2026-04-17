@@ -89,8 +89,8 @@
                     if (metadata.downloadUrl) {
                         let m = metadata.downloadUrl.match(/^https?:\/\/([^/]+)/);
                         if (m) {
-                            // Only allow civitai.com or civitai.green
-                            if (m[1] === "civitai.com" || m[1] === "civitai.green") {
+                            // Only allow civitai.com, civitai.green or civitai.red
+                            if (m[1] === "civitai.com" || m[1] === "civitai.green" || m[1] === "civitai.red") {
                                 domain = m[1];
                             } else {
                                 domain = "civitai.com";
