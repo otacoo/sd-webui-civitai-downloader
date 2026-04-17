@@ -2,6 +2,9 @@
 
 ## [1.1.4] - 2026-04-17
 - Add support for the new Civitai.red domain
+- New option: Pick which Civitai domain to use
+- New option: Show model title instead of filename
+- Fix an issue where the card buttons sometimes weren't showing up on webUI load
 
 ## [1.1.3] - 2026-01-11
 - Populate SD WebUI info file with the model's activation words and description when downloading a model
