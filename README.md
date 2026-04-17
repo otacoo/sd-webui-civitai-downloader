@@ -1,6 +1,6 @@
 # SD WebUI Civitai Model Downloader
 
-A simple extension for downloading models directly from [Civitai.com|red](https://civitai.com) into your Stable Diffusion WebUI environment.
+A simple extension for downloading models directly from [Civitai](https://civitai.com) into your Stable Diffusion WebUI environment.
 
 ### Note: Only tested and working on Forge Classic.
 
