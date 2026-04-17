@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.4] - 2026-04-17
+- Add support for the new Civitai.red domain
+
 ## [1.1.3] - 2026-01-11
 - Populate SD WebUI info file with the model's activation words and description when downloading a model
 
