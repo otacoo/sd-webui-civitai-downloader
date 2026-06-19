@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.5] - 2026-06-19
+- Script will now be able to scan sub-folders for missing info or model updates
+
 ## [1.1.4] - 2026-04-17
 - Add support for the new Civitai.red domain
 - New option: Pick which Civitai domain to use
