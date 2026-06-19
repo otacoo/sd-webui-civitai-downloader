@@ -50,14 +50,15 @@ def check_model_updates():
             unique_folders.add(abs_folder)
         # Only process files with .metadata.json
         for abs_folder in unique_folders:
-            for file in os.listdir(abs_folder):
-                if not (file.lower().endswith(('.safetensors', '.ckpt', '.pt'))):
-                    continue
-                base = os.path.splitext(file)[0]
-                metadata_path = os.path.join(abs_folder, base + '.metadata.json')
-                if not os.path.exists(metadata_path):
-                    continue
-                files_to_check.append((abs_folder, file, metadata_path))
+            for root, dirs, files in os.walk(abs_folder):
+                for file in files:
+                    if not (file.lower().endswith(('.safetensors', '.ckpt', '.pt'))):
+                        continue
+                    base = os.path.splitext(file)[0]
+                    metadata_path = os.path.join(root, base + '.metadata.json')
+                    if not os.path.exists(metadata_path):
+                        continue
+                    files_to_check.append((root, file, metadata_path))
         total = len(files_to_check)
         if total == 0:
             yield "No models found to check for updates."
@@ -65,7 +66,7 @@ def check_model_updates():
         api_key = get_civitai_api_key()
         updates = []
         errors = []
-        for idx, (abs_folder, file, metadata_path) in enumerate(files_to_check, 1):
+        for idx, (_, file, metadata_path) in enumerate(files_to_check, 1):
             if is_cancelled():
                 yield '\n\n'.join(updates + errors + [f"Cancelled after {idx-1} of {total} files."])
                 return

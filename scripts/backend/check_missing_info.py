@@ -52,29 +52,30 @@ def check_missing_info():
             unique_folders.add(abs_folder)
         # First pass: build a list of files with any missing info
         for abs_folder in unique_folders:
-            for file in os.listdir(abs_folder):
-                if not (file.lower().endswith(('.safetensors', '.ckpt', '.pt'))):
-                    continue
-                base = os.path.splitext(file)[0]
-                metadata_path = os.path.join(abs_folder, base + '.metadata.json')
-                preview_found = False
-                for ext in ['.jpg', '.jpeg', '.png', '.webp']:
-                    if os.path.exists(os.path.join(abs_folder, base + f'.preview{ext}')):
-                        preview_found = True
-                        break
-                missing = []
-                if not os.path.exists(metadata_path):
-                    missing.append('metadata')
-                if not preview_found:
-                    missing.append('preview')
-                if missing:
-                    files_to_check.append((abs_folder, file, missing))
+            for root, dirs, files in os.walk(abs_folder):
+                for file in files:
+                    if not (file.lower().endswith(('.safetensors', '.ckpt', '.pt'))):
+                        continue
+                    base = os.path.splitext(file)[0]
+                    metadata_path = os.path.join(root, base + '.metadata.json')
+                    preview_found = False
+                    for ext in ['.jpg', '.jpeg', '.png', '.webp']:
+                        if os.path.exists(os.path.join(root, base + f'.preview{ext}')):
+                            preview_found = True
+                            break
+                    missing = []
+                    if not os.path.exists(metadata_path):
+                        missing.append('metadata')
+                    if not preview_found:
+                        missing.append('preview')
+                    if missing:
+                        files_to_check.append((root, file, missing))
         total = len(files_to_check)
         if total == 0:
             yield "All models have metadata and preview."
             return
         # Second pass: process each file only once
-        for idx, (abs_folder, file, missing) in enumerate(files_to_check, 1):
+        for idx, (root, file, missing) in enumerate(files_to_check, 1):
             if is_cancelled():
                 yield f"Cancelled after {idx-1} of {total} files."
                 return
@@ -84,8 +85,8 @@ def check_missing_info():
             yield '\n'.join(summary + [status])
             try:
                 base = os.path.splitext(file)[0]
-                file_path = os.path.join(abs_folder, file)
-                hash_path = os.path.join(abs_folder, base + '.sha256')
+                file_path = os.path.join(root, file)
+                hash_path = os.path.join(root, base + '.sha256')
                 # Use cached hash if available, else calculate and save
                 if os.path.exists(hash_path):
                     with open(hash_path, 'r', encoding='utf-8') as hf:
@@ -112,7 +113,7 @@ def check_missing_info():
                 preview_url = None
                 if model_version_info.get('images'):
                     preview_url = model_version_info['images'][0]['url']
-                save_preview_and_metadata(abs_folder, file, model_info, preview_url, model_version_info)
+                save_preview_and_metadata(root, file, model_info, preview_url, model_version_info)
                 msg = f"Fixed: {file} ({', '.join(missing)})"
                 print(msg)
                 summary.append(msg)
