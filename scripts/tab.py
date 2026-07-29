@@ -147,7 +147,7 @@ def cancel_download(model_id):
 
 
 def download_civitai_model_with_progress(
-    model_id, model_version_id=None, progress=gr.Progress(), selected_preview_url=None
+    model_id, model_version_id=None, progress=gr.Progress(), selected_preview_url=None, save_folder=None
 ):
     """
     The cancel button should set DOWNLOAD_CANCEL_FLAGS[model_id] = True.
@@ -221,8 +221,11 @@ def download_civitai_model_with_progress(
 
     filename = sanitize_filename(filename)
 
-    MODEL_FOLDERS = get_model_folders()
-    folder = MODEL_FOLDERS.get(model_type, os.path.join("models", "Stable-diffusion"))
+    if save_folder and save_folder != "Auto (based on model type)":
+        folder = save_folder
+    else:
+        MODEL_FOLDERS = get_model_folders()
+        folder = MODEL_FOLDERS.get(model_type, os.path.join("models", "Stable-diffusion"))
     os.makedirs(folder, exist_ok=True)
     dest_path = os.path.join(folder, filename)
 
@@ -365,7 +368,7 @@ def download_civitai_model_with_progress(
         )
 
 
-def download_model(model_state, preview_urls_state, preview_selection, progress=gr.Progress()):
+def download_model(model_state, preview_urls_state, preview_selection, save_folder, progress=gr.Progress()):
     # model_state: (model_id, model_version_id)
     # preview_urls_state: (preview1_url, preview2_url)
     if not model_state or not model_state[0]:
@@ -389,7 +392,7 @@ def download_model(model_state, preview_urls_state, preview_selection, progress=
             selected_preview_url = preview1_url
     
     yield from download_civitai_model_with_progress(
-        model_id, model_version_id, progress, selected_preview_url
+        model_id, model_version_id, progress, selected_preview_url, save_folder
     )
 
 
@@ -457,6 +460,27 @@ def on_ui_tabs():
                 with gr.Row():
                     check_missing_btn = gr.Button("Check models for missing info (preview, metadata)", variant="secondary")
                     check_updates_btn = gr.Button("Check for model updates", variant="secondary")
+
+                if getattr(_shared.opts, "civitai_enable_folder_selector", False):
+                    gr.Markdown("#### Destination Folder")
+                    folder_choices = sorted(set(get_model_folders().values()))
+                    subfolders = set()
+                    for folder in folder_choices:
+                        abs_folder = os.path.abspath(folder)
+                        if os.path.exists(abs_folder):
+                            for root, dirs, files in os.walk(abs_folder):
+                                for d in dirs:
+                                    sub_rel = os.path.relpath(os.path.join(root, d)).replace("\\", "/")
+                                    subfolders.add(sub_rel)
+                    all_folders = sorted(set(folder_choices) | subfolders)
+                    save_folder = gr.Dropdown(
+                        choices=["Auto (based on model type)"] + all_folders,
+                        value="Auto (based on model type)",
+                        label="Save to folder",
+                        interactive=True,
+                    )
+                else:
+                    save_folder = gr.State(value="Auto (based on model type)")
 
                 gr.Markdown("#### Download Controls")
                 with gr.Row():
@@ -595,7 +619,7 @@ def on_ui_tabs():
         )
         download_btn.click(
             fn=download_model,
-            inputs=[model_state, preview_urls_state, preview_selection],
+            inputs=[model_state, preview_urls_state, preview_selection, save_folder],
             outputs=[progress_label, output],
         )
         cancel_btn.click(

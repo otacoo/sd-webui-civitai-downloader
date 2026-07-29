@@ -36,6 +36,13 @@ def on_ui_settings():
             section=section,
         ).info("Deletes the model's files."),
         "sep01": OptionDiv(),
+        "civitai_enable_folder_selector": shared.OptionInfo(
+            False,
+            "Enable destination folder selector",
+            gr.Checkbox,
+            {"interactive": True},
+            section=section,
+        ).info("When enabled, you can pick a custom folder for each download. When disabled, models are auto-saved to the folder based on type."),
         "civitai_folder_lycoris": shared.OptionInfo(
             "Lora",
             "Folder for LyCORIS models",
