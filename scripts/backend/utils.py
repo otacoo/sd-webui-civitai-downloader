@@ -87,7 +87,7 @@ def save_model_info_json(folder, filename, model_info, model_version=None):
     
     # Ensure required fields exist with defaults if not present
     if "sd version" not in existing_data:
-        existing_data["sd version"] = ""
+        existing_data["sd version"] = model_version.get("baseModel", "") if model_version else ""
     if "preferred weight" not in existing_data:
         existing_data["preferred weight"] = 0
     if "negative text" not in existing_data:

@@ -529,7 +529,9 @@ def on_ui_tabs():
                 model_type = model_info.get("type", "Unknown")
                 tags = model_info.get("tags", [])
                 tags_str = ", ".join(tags) if tags else "None"
-                info_text = f"Model: {model_name}\nType: {model_type}\nTags: {tags_str}"
+                base_model = version.get("baseModel", None) if version else None
+                base_line = f"\nBase Model: {base_model}" if base_model else ""
+                info_text = f"Model: {model_name}\nType: {model_type}{base_line}\nTags: {tags_str}"
                 if model_version_id:
                     info_text += f"\nVersion ID: {model_version_id}"
                 return img1, img2, model_id, model_version_id, info_text
