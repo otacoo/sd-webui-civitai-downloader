@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.0] - 2026-07-29
+- Add an option to select Save folder before download
+  - Works for sub folders too
+- Model Info will now show Base Model
+
 ## [1.1.5] - 2026-06-19
 - Script will now be able to scan sub-folders for missing info or model updates
 
