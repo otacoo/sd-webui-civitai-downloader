@@ -5,20 +5,112 @@ import requests
 from urllib.parse import urlparse, parse_qs
 from modules import shared
 
-def get_model_folders():
+MODEL_FILE_EXTS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin")
+
+def _dedupe_paths(paths):
+    seen = set()
+    result = []
+    for path in paths:
+        key = os.path.normcase(os.path.abspath(path))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
+
+def _folder_has_model_files(folder):
+    for root, dirs, files in os.walk(folder):
+        if any(name.lower().endswith(MODEL_FILE_EXTS) for name in files):
+            return True
+    return False
+
+def get_model_folder_candidates():
+    """Ordered candidate folders for each model type.
+
+    Supports both the classic A1111 folder names and ComfyUI-style names,
+    e.g. models/Lora vs models/loras or models/Stable-diffusion vs
+    models/checkpoints and models/diffusion_models.
+    """
+    lycoris_folder = getattr(shared.opts, "civitai_folder_lycoris", "Lora")
+    locon_folder = getattr(shared.opts, "civitai_folder_locon", "Lora")
+
+    def paths(*names):
+        return _dedupe_paths([os.path.join("models", name) for name in names])
+
     return {
-        "Checkpoint": os.path.join("models", "Stable-diffusion"),
-        "LORA": os.path.join("models", "Lora"),
-        "LyCORIS": os.path.join("models", getattr(shared.opts, "civitai_folder_lycoris", "Lora")),
-        "LoCon": os.path.join("models", getattr(shared.opts, "civitai_folder_locon", "Lora")),
-        "LoHa": os.path.join("models", "Lora"),
-        "DoRA": os.path.join("models", "Lora"),
-        "Controlnet": os.path.join("models", "ControlNet"),
-        "Upscaler": os.path.join("models", "ESRGAN"),
-        "VAE": os.path.join("models", "VAE"),
-        "TextualInversion": os.path.join("models", "embeddings"),
-        "Hypernetwork": os.path.join("models", "hypernetworks"),
+        "Checkpoint": paths("Stable-diffusion", "checkpoints", "diffusion_models", "unet"),
+        "LORA": paths("Lora", "loras"),
+        "LyCORIS": paths(lycoris_folder, "Lora", "loras"),
+        "LoCon": paths(locon_folder, "Lora", "loras"),
+        "LoHa": paths("Lora", "loras"),
+        "DoRA": paths("Lora", "loras"),
+        "Controlnet": paths("ControlNet", "controlnet"),
+        "Upscaler": paths("ESRGAN", "upscale_models"),
+        "VAE": paths("VAE", "vae"),
+        "TextualInversion": paths("embeddings"),
+        "Hypernetwork": paths("hypernetworks"),
     }
+
+def _resolve_model_folder(candidates):
+    existing = [folder for folder in candidates if os.path.isdir(folder)]
+    if len(existing) == 1:
+        return existing[0]
+    for folder in existing:
+        if _folder_has_model_files(folder):
+            return folder
+    if existing:
+        return existing[0]
+    return candidates[0]
+
+def get_model_folders():
+    """Return the preferred folder for each model type.
+
+    The first candidate that exists and actually contains model files wins,
+    so A1111 and ComfyUI-style folder layouts are both supported.
+    """
+    folders = {
+        model_type: _resolve_model_folder(candidates)
+        for model_type, candidates in get_model_folder_candidates().items()
+    }
+    # An explicitly configured LyCORIS/LoCon folder wins even if it does not exist yet.
+    for model_type, option in (
+        ("LyCORIS", "civitai_folder_lycoris"),
+        ("LoCon", "civitai_folder_locon"),
+    ):
+        custom_folder = getattr(shared.opts, option, "Lora")
+        if custom_folder and custom_folder not in ("Lora", "loras"):
+            folders[model_type] = os.path.join("models", custom_folder)
+    return folders
+
+def get_all_model_folders():
+    """Return every existing candidate folder for each model type.
+
+    Used by the scanners so models are found regardless of whether the
+    install uses A1111 or ComfyUI-style folder names. Folders resolving to
+    the same real path (junctions/symlinks) are only returned once.
+    """
+    result = {}
+    seen = set()
+    for model_type, candidates in get_model_folder_candidates().items():
+        folders = []
+        for folder in candidates:
+            if not os.path.isdir(folder):
+                continue
+            real = os.path.normcase(os.path.realpath(folder))
+            if real in seen:
+                continue
+            seen.add(real)
+            folders.append(folder)
+        if folders:
+            result[model_type] = folders
+    return result
+
+def get_model_folder_roots():
+    """Return all model folders that can be used as download destinations."""
+    roots = set(get_model_folders().values())
+    for folders in get_all_model_folders().values():
+        roots.update(folders)
+    return sorted(roots)
 
 def get_civitai_api_key():
     return getattr(shared.opts, "civitai_api_key", "")

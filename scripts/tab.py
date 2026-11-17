@@ -7,7 +7,7 @@ import time
 import json
 from urllib.parse import urlparse, parse_qs, urlunparse
 from modules import script_callbacks, shared as _shared
-from scripts.backend.utils import get_model_folders, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
+from scripts.backend.utils import get_model_folders, get_model_folder_roots, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
 from scripts.backend import metadata, delete_model
 from scripts.settings import on_ui_settings
 from scripts.backend.check_missing_info import check_missing_info
@@ -463,7 +463,7 @@ def on_ui_tabs():
 
                 if getattr(_shared.opts, "civitai_enable_folder_selector", False):
                     gr.Markdown("#### Destination Folder")
-                    folder_choices = sorted(set(get_model_folders().values()))
+                    folder_choices = get_model_folder_roots()
                     subfolders = set()
                     for folder in folder_choices:
                         abs_folder = os.path.abspath(folder)

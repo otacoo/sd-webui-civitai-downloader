@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-from .utils import get_model_folders, get_civitai_api_key, get_civitai_domains
+from .utils import get_all_model_folders, get_civitai_api_key, get_civitai_domains
 from .process_control import is_running, set_running, clear_running, cancel_process, is_cancelled, get_type
 
 def get_latest_model_info(model_id, api_key=None):
@@ -36,18 +36,19 @@ def check_model_updates():
         return
     set_running('updates')
     try:
-        MODEL_FOLDERS = get_model_folders()
+        MODEL_FOLDERS = get_all_model_folders()
         skip_types = {"Controlnet", "Upscaler", "VAE"}
         files_to_check = []
         # Deduplicate folders to avoid scanning the same folder multiple times
         unique_folders = set()
-        for model_type, folder in MODEL_FOLDERS.items():
+        for model_type, folders in MODEL_FOLDERS.items():
             if model_type in skip_types:
                 continue
-            abs_folder = os.path.abspath(folder)
-            if not os.path.exists(abs_folder):
-                continue
-            unique_folders.add(abs_folder)
+            for folder in folders:
+                abs_folder = os.path.abspath(folder)
+                if not os.path.exists(abs_folder):
+                    continue
+                unique_folders.add(abs_folder)
         # Only process files with .metadata.json
         for abs_folder in unique_folders:
             for root, dirs, files in os.walk(abs_folder):

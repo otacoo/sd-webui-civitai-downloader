@@ -1,7 +1,7 @@
 import os
 import hashlib
 import requests
-from .utils import get_model_folders, get_civitai_api_key, get_civitai_domains, save_preview_and_metadata
+from .utils import get_all_model_folders, get_civitai_api_key, get_civitai_domains, save_preview_and_metadata
 from .process_control import is_running, set_running, clear_running, cancel_process, is_cancelled, get_type
 
 def sha256_of_file(filepath):
@@ -37,19 +37,20 @@ def check_missing_info():
         return
     set_running('missing_info')
     try:
-        MODEL_FOLDERS = get_model_folders()
+        MODEL_FOLDERS = get_all_model_folders()
         summary = []
         skip_types = {"Controlnet", "Upscaler", "VAE"}
         files_to_check = []
         # Deduplicate folders to avoid scanning the same folder multiple times
         unique_folders = set()
-        for model_type, folder in MODEL_FOLDERS.items():
+        for model_type, folders in MODEL_FOLDERS.items():
             if model_type in skip_types:
                 continue
-            abs_folder = os.path.abspath(folder)
-            if not os.path.exists(abs_folder):
-                continue
-            unique_folders.add(abs_folder)
+            for folder in folders:
+                abs_folder = os.path.abspath(folder)
+                if not os.path.exists(abs_folder):
+                    continue
+                unique_folders.add(abs_folder)
         # First pass: build a list of files with any missing info
         for abs_folder in unique_folders:
             for root, dirs, files in os.walk(abs_folder):
