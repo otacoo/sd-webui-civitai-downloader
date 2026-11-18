@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0] - 2026-11-18
+- Improved the download progress
+  - Will no longer stall and cause resource usage if tab doesn't have focus
+  - Smoother progress and status tracking
+- Models will now auto match and download into model sub-folders if the model type matches
+- Improve detection of folders
+  - Can better match sub-folders
+  - Can match ComfyUI and A1111 folder naming schemes
+
 ## [1.2.0] - 2026-07-29
 - Add an option to select Save folder before download
   - Works for sub folders too
