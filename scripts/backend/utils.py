@@ -112,6 +112,54 @@ def get_model_folder_roots():
         roots.update(folders)
     return sorted(roots)
 
+def _normalize_model_name(name):
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+def find_matching_subfolder(folder, base_model):
+    """Return a direct sub-folder of ``folder`` matching Civitai's base model.
+
+    Matching is case-insensitive and ignores spaces/punctuation, so
+    "SD 1.5" matches "SD15" and "Krea 2" matches "Krea2". Folder names that
+    are a prefix of the base model also match, so "SDXL" is used for
+    "SDXL 1.0" and "Flux" for "Flux.1 D".
+    """
+    base_norm = _normalize_model_name(base_model)
+    if not base_norm or not os.path.isdir(folder):
+        return None
+
+    try:
+        with os.scandir(folder) as entries:
+            entries = sorted(entries, key=lambda entry: entry.name.lower())
+    except OSError:
+        return None
+
+    exact = []
+    normalized = []
+    prefixed = []
+    for entry in entries:
+        try:
+            if not entry.is_dir():
+                continue
+        except OSError:
+            continue
+        name_norm = _normalize_model_name(entry.name)
+        if not name_norm:
+            continue
+        if entry.name.lower() == base_model.lower():
+            exact.append(entry.path)
+        elif name_norm == base_norm:
+            normalized.append(entry.path)
+        elif len(name_norm) >= 3 and base_norm.startswith(name_norm):
+            prefixed.append((len(name_norm), entry.path))
+
+    for matches in (exact, normalized):
+        if matches:
+            return matches[0]
+    if prefixed:
+        prefixed.sort(key=lambda match: match[0], reverse=True)
+        return prefixed[0][1]
+    return None
+
 def get_civitai_api_key():
     return getattr(shared.opts, "civitai_api_key", "")
 

@@ -7,7 +7,7 @@ import time
 import json
 from urllib.parse import urlparse, parse_qs, urlunparse
 from modules import script_callbacks, shared as _shared
-from scripts.backend.utils import get_model_folders, get_model_folder_roots, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
+from scripts.backend.utils import get_model_folders, get_model_folder_roots, find_matching_subfolder, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
 from scripts.backend import metadata, delete_model
 from scripts.settings import on_ui_settings
 from scripts.backend.check_missing_info import check_missing_info
@@ -25,6 +25,8 @@ def get_package_version():
         return 'unknown'
 
 VERSION = get_package_version()
+
+AUTO_SAVE_FOLDER = "Auto (based on model type)"
 
 def parse_civitai_model_and_version_id(input_str):
     if input_str.strip().isdigit():
@@ -221,11 +223,15 @@ def download_civitai_model_with_progress(
 
     filename = sanitize_filename(filename)
 
-    if save_folder and save_folder != "Auto (based on model type)":
+    if save_folder and save_folder != AUTO_SAVE_FOLDER:
         folder = save_folder
     else:
         MODEL_FOLDERS = get_model_folders()
         folder = MODEL_FOLDERS.get(model_type, os.path.join("models", "Stable-diffusion"))
+        subfolder = find_matching_subfolder(folder, version.get("baseModel", ""))
+        if subfolder:
+            folder = subfolder
+            print(f"Auto-selected sub-folder for base model {version.get('baseModel')}: {folder}")
     os.makedirs(folder, exist_ok=True)
     dest_path = os.path.join(folder, filename)
 
@@ -474,13 +480,14 @@ def on_ui_tabs():
                                     subfolders.add(sub_rel)
                     all_folders = sorted(set(folder_choices) | subfolders)
                     save_folder = gr.Dropdown(
-                        choices=["Auto (based on model type)"] + all_folders,
-                        value="Auto (based on model type)",
+                        choices=[AUTO_SAVE_FOLDER] + all_folders,
+                        value=AUTO_SAVE_FOLDER,
                         label="Save to folder",
+                        info="Auto uses the model type folder, then a matching base-model sub-folder if one exists.",
                         interactive=True,
                     )
                 else:
-                    save_folder = gr.State(value="Auto (based on model type)")
+                    save_folder = gr.State(value=AUTO_SAVE_FOLDER)
 
                 gr.Markdown("#### Download Controls")
                 with gr.Row():
