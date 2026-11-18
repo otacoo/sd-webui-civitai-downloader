@@ -8,7 +8,8 @@ import json
 from urllib.parse import urlparse, parse_qs, urlunparse
 from modules import script_callbacks, shared as _shared
 from scripts.backend.utils import get_model_folders, get_model_folder_roots, find_matching_subfolder, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
-from scripts.backend import metadata, delete_model
+from scripts.backend import metadata, delete_model, download_status
+from scripts.backend.download_status import reset_status, set_status
 from scripts.settings import on_ui_settings
 from scripts.backend.check_missing_info import check_missing_info
 from scripts.backend.check_model_updates import check_model_updates
@@ -149,25 +150,30 @@ def cancel_download(model_id):
 
 
 def download_civitai_model_with_progress(
-    model_id, model_version_id=None, progress=gr.Progress(), selected_preview_url=None, save_folder=None
+    model_id, model_version_id=None, selected_preview_url=None, save_folder=None
 ):
     """
     The cancel button should set DOWNLOAD_CANCEL_FLAGS[model_id] = True.
+    Live progress is exposed through /sd-webui-model-downloader/api/download_status
+    and polled by javascript/download_progress.js.
     """
-    # Clear output at the start of a new download
-    yield gr.Label.update(value="Starting..."), gr.Textbox.update(value="")
+    reset_status(active=True, phase="starting", message="Starting download...")
+    # Clear any previous error; live progress is shown above this output area.
+    yield ""
+
     api_key = get_civitai_api_key()
     # Reset cancellation flag at the start
     DOWNLOAD_CANCEL_FLAGS[model_id] = False
 
+    def fail(message):
+        DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
+        set_status(active=False, phase="error", message=message)
+        return message
+
     try:
         data = get_civitai_model_info(model_id, api_key=api_key)
     except Exception as e:
-        # Clean up flag on error
-        DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-        yield gr.Label.update(value="Error"), gr.Textbox.update(
-            value=f"Error: {str(e)}"
-        )
+        yield fail(f"Error: {str(e)}")
         return
 
     model_versions = data.get("modelVersions", [])
@@ -178,22 +184,13 @@ def download_civitai_model_with_progress(
                 version = v
                 break
         if not version:
-            DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-            yield (
-                gr.Label.update(value="Error"),
-                gr.Textbox.update(
-                    value=f"Model version ID {model_version_id} not found for model {model_id}."
-                ),
-            )
+            yield fail(f"Model version ID {model_version_id} not found for model {model_id}.")
             return
     else:
         if model_versions:
             version = model_versions[0]
         else:
-            DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-            yield gr.Label.update(value="Error"), gr.Textbox.update(
-                value="No versions found for this model."
-            )
+            yield fail("No versions found for this model.")
             return
 
     model_type = data.get("type", "Checkpoint")
@@ -204,10 +201,7 @@ def download_civitai_model_with_progress(
     ]
 
     if not model_files:
-        DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-        yield gr.Label.update(value="Error"), gr.Textbox.update(
-            value="No valid model file found for this version."
-        )
+        yield fail("No valid model file found for this version.")
         return
 
     file_info = model_files[0]
@@ -234,6 +228,7 @@ def download_civitai_model_with_progress(
             print(f"Auto-selected sub-folder for base model {version.get('baseModel')}: {folder}")
     os.makedirs(folder, exist_ok=True)
     dest_path = os.path.join(folder, filename)
+    set_status(filename=filename, model_type=model_type, folder=folder)
 
     if os.path.exists(dest_path):
         msg = f"Model already exists: {dest_path}"
@@ -245,7 +240,7 @@ def download_civitai_model_with_progress(
             preview_url = version["images"][0]["url"]
         save_preview_and_metadata(folder, filename, data, preview_url, version)
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-        yield gr.Label.update(value=msg), gr.Textbox.update(value=msg)
+        set_status(active=False, phase="done", message=msg, percent=100.0)
         return
 
     headers = {}
@@ -264,17 +259,20 @@ def download_civitai_model_with_progress(
         pass
 
     try:
-        r = None
-        try:
-            r = robust_get(download_url, headers=headers, stream=True)
-        except Exception as e:
-            raise
+        r = robust_get(download_url, headers=headers, stream=True)
 
-        with r as r:
+        with r:
             r.raise_for_status()
             total = int(r.headers.get("content-length", 0))
             chunk_size = 8192 * 4  # 32KB
-            update_interval = 1024 * 1024 * 10  # 10MB
+            set_status(
+                phase="downloading",
+                total=total,
+                downloaded=0,
+                percent=0.0,
+                speed=0.0,
+                eta=0.0,
+            )
 
             print(f"\nDownloading {filename} ({model_type}) from {download_url}")
             print(f"Total size: {total // 1024 // 1024}MB")
@@ -282,7 +280,7 @@ def download_civitai_model_with_progress(
             with open(dest_path, "wb") as f:
                 downloaded = 0
                 last_update = 0
-                last_progress = 0
+                last_status_update = 0
                 start_time = time.time()
 
                 while True:
@@ -298,19 +296,24 @@ def download_civitai_model_with_progress(
                         except Exception as cleanup_err:
                             print(f"Failed to remove partial file: {cleanup_err}")
                         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-                        yield (
-                            gr.Label.update(value="Cancelled"),
-                            gr.Textbox.update(
-                                value=f"Download cancelled and partial files deleted for: {filename}"
-                            ),
+                        msg = f"Download cancelled and partial files deleted for: {filename}"
+                        set_status(
+                            active=False,
+                            phase="cancelled",
+                            message=msg,
+                            downloaded=downloaded,
+                            total=total,
+                            percent=(downloaded / total * 100) if total else 0.0,
+                            speed=0.0,
+                            eta=0.0,
                         )
                         return
 
                     f.write(chunk)
                     downloaded += len(chunk)
+                    now = time.time()
 
                     # Terminal progress bar
-                    now = time.time()
                     if now - last_update > 0.5 or downloaded == total:
                         mb_downloaded = downloaded / 1024 / 1024
                         mb_total = total / 1024 / 1024 if total else 0
@@ -333,28 +336,32 @@ def download_civitai_model_with_progress(
                         )
                         last_update = now
 
-                    # Gradio progress
-                    progress_str = "Downloading..."
-                    if (
-                        downloaded - last_progress > update_interval
-                        or downloaded == total
-                    ):
-                        progress((downloaded / total) if total else 0)
-                        yield (
-                            gr.Label.update(
-                                value=(
-                                    f"Downloading: {downloaded//1024}KB/{total//1024 if total else '?'}KB "
-                                    f"({downloaded/total*100:.1f}%)"
-                                    if total
-                                    else ""
-                                )
-                            ),
-                            gr.Textbox.update(value=progress_str),
+                    # The frontend polls this state, so no Gradio updates are
+                    # queued while a background tab cannot process them.
+                    if now - last_status_update >= 0.5 or downloaded == total:
+                        elapsed = now - start_time
+                        speed = (downloaded / elapsed) if elapsed > 0 else 0.0
+                        eta = ((total - downloaded) / speed) if speed > 0 and total else 0.0
+                        set_status(
+                            phase="downloading",
+                            downloaded=downloaded,
+                            total=total,
+                            percent=(downloaded / total * 100) if total else 0.0,
+                            speed=speed,
+                            eta=eta,
                         )
-                        last_progress = downloaded
+                        last_status_update = now
 
                 print()  # Newline after terminal progress
             print(f"\nDownloaded to {dest_path}")
+
+        set_status(
+            phase="saving",
+            message="Saving preview and metadata...",
+            percent=100.0,
+            speed=0.0,
+            eta=0.0,
+        )
 
         # After download, save preview and metadata
         # Use selected preview URL if provided, otherwise fall back to first image
@@ -363,25 +370,33 @@ def download_civitai_model_with_progress(
             preview_url = version["images"][0]["url"]
         save_preview_and_metadata(folder, filename, data, preview_url, version)
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-        yield gr.Label.update(value="Done"), gr.Textbox.update(
-            value=f"Downloaded Civitai {model_type} model to: {dest_path}"
+        msg = f"Downloaded Civitai {model_type} model to: {dest_path}"
+        set_status(
+            active=False,
+            phase="done",
+            message=msg,
+            downloaded=downloaded,
+            total=total or downloaded,
+            percent=100.0,
+            speed=0.0,
+            eta=0.0,
         )
-        time.sleep(0.2)
     except Exception as e:
         DOWNLOAD_CANCEL_FLAGS.pop(model_id, None)
-        yield gr.Label.update(value="Error"), gr.Textbox.update(
-            value=f"Error downloading from Civitai: {str(e)}"
-        )
+        yield fail(f"Error downloading from Civitai: {str(e)}")
 
 
-def download_model(model_state, preview_urls_state, preview_selection, save_folder, progress=gr.Progress()):
+def download_model(model_state, preview_urls_state, preview_selection, save_folder=None):
     # model_state: (model_id, model_version_id)
     # preview_urls_state: (preview1_url, preview2_url)
     if not model_state or not model_state[0]:
-        yield gr.Label.update(value="Error"), gr.Textbox.update(
-            value="No model checked. Please check the model first."
-        )
+        message = "No model checked. Please check the model first."
+        set_status(active=False, phase="error", message=message)
+        yield message
         return
+    # When the folder selector is disabled, auto placement must still apply.
+    if not save_folder:
+        save_folder = AUTO_SAVE_FOLDER
     model_id, model_version_id = model_state
     # Determine which preview URL to use
     selected_preview_url = None
@@ -398,7 +413,7 @@ def download_model(model_state, preview_urls_state, preview_selection, save_fold
             selected_preview_url = preview1_url
     
     yield from download_civitai_model_with_progress(
-        model_id, model_version_id, progress, selected_preview_url, save_folder
+        model_id, model_version_id, selected_preview_url, save_folder
     )
 
 
@@ -436,16 +451,50 @@ def on_ui_tabs():
         gr.HTML(
             f"""
         <style>
-        /* Remove the glowing border and animation from the Output gr.Textbox */
-        #ota_textbox > .generating,
-        #ota_progress > .generating,
-        #ota_progress > .wrap.full {{
+        /* Remove the glowing border and animation from the Output area */
+        #ota_textbox > .generating {{
             display: none !important;
         }}
         #ota_textbox {{
             border: var(--input-border-width) solid var(--input-border-color);
             border-radius: var(--input-radius);
             padding: 5px 0 5px 10px;
+            font-size: 1.05em;
+        }}
+        #ota_download_status {{
+            min-height: 0;
+            padding: 0;
+        }}
+        #ota_download_status .ota-progress-title {{
+            font-size: 1.1em;
+            word-break: break-all;
+        }}
+        #ota_download_status .ota-progress-detail {{
+            font-size: 1em;
+            color: var(--body-text-color-subdued, #888);
+            margin-top: 2px;
+        }}
+        #ota_download_status .ota-progress-track {{
+            height: 8px;
+            margin-top: 6px;
+            background: var(--input-border-color, #ccc);
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+        #ota_download_status .ota-progress-fill {{
+            height: 100%;
+            width: 0;
+            background: var(--button-primary-background-fill, var(--button-primary-background, #4caf50));
+            transition: width 0.2s linear;
+        }}
+        #ota_download_status.ota-progress-error .ota-progress-fill {{
+            background: #d9534f;
+        }}
+        #ota_download_status.ota-progress-done .ota-progress-fill {{
+            background: #3c9d3c;
+        }}
+        #ota_download_status.ota-progress-cancelled .ota-progress-fill {{
+            background: #c98a1b;
         }}
         </style>
         {extra_css}
@@ -496,7 +545,7 @@ def on_ui_tabs():
                         "Download", interactive=False, variant="primary", scale=2
                     )
 
-                progress_label = gr.Label(label="Progress", elem_id="ota_progress")
+                download_progress = gr.HTML(elem_id="ota_download_status")
                 output = gr.Markdown(label="Output", elem_id="ota_textbox")
 
             with gr.Column(variant="panel"):
@@ -590,9 +639,9 @@ def on_ui_tabs():
             except Exception:
                 pass
             if cancelled:
-                return gr.Label.update(value=""), "Cancelling..."
+                return "Cancelling..."
             else:
-                return gr.Label.update(value=""), "Nothing to cancel."
+                return "Nothing to cancel."
 
         # --- Button bindings ---
         check_btn.click(
@@ -627,12 +676,12 @@ def on_ui_tabs():
         download_btn.click(
             fn=download_model,
             inputs=[model_state, preview_urls_state, preview_selection, save_folder],
-            outputs=[progress_label, output],
+            outputs=[output],
         )
         cancel_btn.click(
             fn=cancel_download,
             inputs=[model_state],
-            outputs=[progress_label, output],
+            outputs=[output],
         )
 
     return [(ui_component, "Model Downloader", "extension_model_dl_tab")]
@@ -642,3 +691,4 @@ script_callbacks.on_ui_tabs(on_ui_tabs)
 script_callbacks.on_ui_settings(on_ui_settings)
 script_callbacks.on_app_started(metadata.on_app_started)
 script_callbacks.on_app_started(delete_model.on_app_started)
+script_callbacks.on_app_started(download_status.on_app_started)

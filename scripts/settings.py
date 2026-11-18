@@ -42,7 +42,7 @@ def on_ui_settings():
             gr.Checkbox,
             {"interactive": True},
             section=section,
-        ).info("When enabled, you can pick a custom folder for each download. When disabled, models are auto-saved to the folder based on type."),
+        ).info("When enabled, you can pick a custom folder for each download. When disabled, models are auto-saved to the folder based on type, including a matching base-model sub-folder if one exists."),
         "civitai_folder_lycoris": shared.OptionInfo(
             "Lora",
             "Folder for LyCORIS models",
