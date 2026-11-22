@@ -1,6 +1,7 @@
 import gradio as gr
 from modules import shared
 from modules.options import OptionDiv
+from scripts.backend.utils import get_default_folder_convention
 
 
 def on_ui_settings():
@@ -43,20 +44,13 @@ def on_ui_settings():
             {"interactive": True},
             section=section,
         ).info("When enabled, you can pick a custom folder for each download. When disabled, models are auto-saved to the folder based on type, including a matching base-model sub-folder if one exists."),
-        "civitai_folder_lycoris": shared.OptionInfo(
-            "Lora",
-            "Folder for LyCORIS models",
-            gr.Textbox,
-            {"interactive": True, "type": "text"},
+        "civitai_folder_convention": shared.OptionInfo(
+            get_default_folder_convention(),
+            "Folder saving convention",
+            gr.Radio,
+            {"choices": ["ComfyUI", "Forge"], "interactive": True},
             section=section,
-        ).info("Default: Lora"),
-        "civitai_folder_locon": shared.OptionInfo(
-            "Lora",
-            "Folder for LoCon models",
-            gr.Textbox,
-            {"interactive": True, "type": "text"},
-            section=section,
-        ).info("Default: Lora"),
+        ).info("Must match the folder layout your WebUI uses. ComfyUI: diffusion_models, loras, vae, controlnet, upscale_models. Forge: Stable-diffusion, Lora, VAE, ControlNet, ESRGAN."),
         "sep03": OptionDiv(),
         "civitai_disable_card_description": shared.OptionInfo(
             True,

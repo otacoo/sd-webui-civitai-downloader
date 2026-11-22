@@ -15,6 +15,7 @@ A simple extension for downloading models directly from [Civitai](https://civita
 - Check and download missing model info like preview images or metadata.
 - Adds buttons to every model card to open the model page or delete the files.
 - Models are automatically saved in the correct folders (Checkpoints, Lora, LyCORIS, Textual Inversion, Hypernetworks etc.).
+- Choose a ComfyUI-style or Forge-style model folder layout.
 - Saves model metadata and preview images alongside the downloaded model file.
 
 ## SD WebUI Installation
@@ -35,14 +36,23 @@ To download restricted models (XXX) on Civitai requires authentication. To use y
 
 ## Folder Structure
 
-Downloaded models are automatically saved to the following folders:
+Downloaded models are saved using the **Folder saving convention** setting:
 
-- `models/Stable-diffusion/` (Checkpoints)
-- `models/Lora/` (LoRA, LyCORIS, LoCon, LoHa, DoRA)\
-  *Note: LoCon and LyCORIS files are saved into the Lora folder by default, you change this in the settings.*
+**ComfyUI**
+- `models/diffusion_models/` (Checkpoints)
+- `models/loras/` (LoRA, LyCORIS, LoCon, LoHa, DoRA)
 - `models/embeddings/` (Textual Inversion)
 - `models/hypernetworks/` (Hypernetworks)
-- `models/Controlnet/` (ControlNet)
+- `models/controlnet/` (ControlNet)
+- `models/vae/` (VAE)
+- `models/upscale_models/` (Upscalers)
+
+**Forge**
+- `models/Stable-diffusion/` (Checkpoints)
+- `models/Lora/` (LoRA, LyCORIS, LoCon, LoHa, DoRA)
+- `models/embeddings/` (Textual Inversion)
+- `models/hypernetworks/` (Hypernetworks)
+- `models/ControlNet/` (ControlNet)
 - `models/VAE/` (VAE)
 - `models/ESRGAN/` (Upscalers)
 

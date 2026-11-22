@@ -221,7 +221,10 @@ def download_civitai_model_with_progress(
         folder = save_folder
     else:
         MODEL_FOLDERS = get_model_folders()
-        folder = MODEL_FOLDERS.get(model_type, os.path.join("models", "Stable-diffusion"))
+        folder = MODEL_FOLDERS.get(
+            model_type,
+            MODEL_FOLDERS.get("Checkpoint", os.path.join("models", "Stable-diffusion")),
+        )
         subfolder = find_matching_subfolder(folder, version.get("baseModel", ""))
         if subfolder:
             folder = subfolder
