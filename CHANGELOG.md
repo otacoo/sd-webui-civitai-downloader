@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1] - 2026-11-22
+- **Removed** LoCon and LyCORIS filtering options
+  - All LoRA types will be saved in the respective LoRA folder
+- Added a **new option** for *Folder saving convention*
+  - Pick from ComfyUI or Forge style folders
+
 ## [1.3.0] - 2026-11-18
 - Improved the download progress
   - Will no longer stall and cause resource usage if tab doesn't have focus
