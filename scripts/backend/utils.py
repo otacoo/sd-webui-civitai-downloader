@@ -69,6 +69,27 @@ def get_model_folders():
         )
     return folders
 
+DOWNLOADABLE_EXTENSIONS = (".safetensors", ".ckpt", ".pth", ".gguf")
+
+def get_downloadable_files(files):
+    """Return supported model files, primary/default first."""
+    files = files or []
+    model_files = [f for f in files if (f.get("type") or "Model") == "Model"]
+    if not model_files:
+        model_files = files
+    supported = [
+        f for f in model_files
+        if (f.get("name") or "").lower().endswith(DOWNLOADABLE_EXTENSIONS)
+        and f.get("downloadUrl")
+    ]
+    primary = [f for f in supported if f.get("primary")]
+    others = [f for f in supported if not f.get("primary")]
+    return primary + others
+
+def get_default_download_file(files):
+    supported = get_downloadable_files(files)
+    return supported[0] if supported else None
+
 def get_scan_folder_candidates():
     """Return every known folder name for scanning, across both conventions."""
     def paths(*names):
