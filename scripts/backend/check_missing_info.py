@@ -55,7 +55,7 @@ def check_missing_info():
         for abs_folder in unique_folders:
             for root, dirs, files in os.walk(abs_folder):
                 for file in files:
-                    if not (file.lower().endswith(('.safetensors', '.ckpt', '.pt'))):
+                    if not (file.lower().endswith(('.safetensors', '.ckpt', '.pt', '.gguf'))):
                         continue
                     base = os.path.splitext(file)[0]
                     metadata_path = os.path.join(root, base + '.metadata.json')

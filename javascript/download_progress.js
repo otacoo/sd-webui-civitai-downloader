@@ -1,7 +1,3 @@
-// download_progress.js
-// Polls the backend download status and renders it into the Model Downloader
-// tab. Polling keeps only the latest state, so background tabs cannot build up
-// a queue of Gradio component updates.
 (function () {
     "use strict";
 
@@ -140,7 +136,7 @@
                 lastActive = !!status.active;
                 render(status);
             })
-            .catch(function () { /* WebUI may still be starting */ })
+            .catch(function () {})
             .finally(function () {
                 inFlight = false;
                 schedule();
