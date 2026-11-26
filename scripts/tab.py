@@ -7,7 +7,7 @@ import time
 import json
 from urllib.parse import urlparse, parse_qs, urlunparse
 from modules import script_callbacks, shared as _shared
-from scripts.backend.utils import get_model_folders, get_model_folder_roots, find_matching_subfolder, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
+from scripts.backend.utils import get_model_folders, get_model_folder_roots, find_matching_subfolder, get_downloadable_files, get_default_download_file, get_civitai_api_key, get_civitai_model_info, save_preview_and_metadata
 from scripts.backend import metadata, delete_model, download_status
 from scripts.backend.download_status import reset_status, set_status
 from scripts.settings import on_ui_settings
@@ -150,7 +150,7 @@ def cancel_download(model_id):
 
 
 def download_civitai_model_with_progress(
-    model_id, model_version_id=None, selected_preview_url=None, save_folder=None
+    model_id, model_version_id=None, selected_preview_url=None, save_folder=None, file_info=None
 ):
     """
     The cancel button should set DOWNLOAD_CANCEL_FLAGS[model_id] = True.
@@ -158,7 +158,6 @@ def download_civitai_model_with_progress(
     and polled by javascript/download_progress.js.
     """
     reset_status(active=True, phase="starting", message="Starting download...")
-    # Clear any previous error; live progress is shown above this output area.
     yield ""
 
     api_key = get_civitai_api_key()
@@ -194,17 +193,12 @@ def download_civitai_model_with_progress(
             return
 
     model_type = data.get("type", "Checkpoint")
-    valid_extensions = {".safetensors", ".pth", ".ckpt"}
-    model_files = [
-        f for f in version["files"]
-        if any(f["name"].lower().endswith(ext) for ext in valid_extensions)
-    ]
-
-    if not model_files:
+    if not file_info:
+        file_info = get_default_download_file(version.get("files", []))
+    if not file_info or not file_info.get("downloadUrl") or not file_info.get("name"):
         yield fail("No valid model file found for this version.")
         return
 
-    file_info = model_files[0]
     download_url = file_info["downloadUrl"]
     filename = file_info["name"]
 
@@ -339,8 +333,6 @@ def download_civitai_model_with_progress(
                         )
                         last_update = now
 
-                    # The frontend polls this state, so no Gradio updates are
-                    # queued while a background tab cannot process them.
                     if now - last_status_update >= 0.5 or downloaded == total:
                         elapsed = now - start_time
                         speed = (downloaded / elapsed) if elapsed > 0 else 0.0
@@ -389,7 +381,14 @@ def download_civitai_model_with_progress(
         yield fail(f"Error downloading from Civitai: {str(e)}")
 
 
-def download_model(model_state, preview_urls_state, preview_selection, save_folder=None):
+def download_model(
+    model_state,
+    preview_urls_state,
+    preview_selection,
+    save_folder=None,
+    file_selection=None,
+    files_state=None,
+):
     # model_state: (model_id, model_version_id)
     # preview_urls_state: (preview1_url, preview2_url)
     if not model_state or not model_state[0]:
@@ -397,9 +396,20 @@ def download_model(model_state, preview_urls_state, preview_selection, save_fold
         set_status(active=False, phase="error", message=message)
         yield message
         return
-    # When the folder selector is disabled, auto placement must still apply.
     if not save_folder:
         save_folder = AUTO_SAVE_FOLDER
+    selected_file = None
+    if isinstance(files_state, dict):
+        selected_file = files_state.get(file_selection)
+        if not selected_file:
+            selected_file = next(iter(files_state.values()), None)
+    elif files_state:
+        try:
+            selected_file = files_state[int(file_selection)]
+        except (TypeError, ValueError, IndexError):
+            selected_file = None
+        if not selected_file:
+            selected_file = get_default_download_file(files_state)
     model_id, model_version_id = model_state
     # Determine which preview URL to use
     selected_preview_url = None
@@ -416,8 +426,63 @@ def download_model(model_state, preview_urls_state, preview_selection, save_fold
             selected_preview_url = preview1_url
     
     yield from download_civitai_model_with_progress(
-        model_id, model_version_id, selected_preview_url, save_folder
+        model_id, model_version_id, selected_preview_url, save_folder, selected_file
     )
+
+
+def format_file_size(size_kb):
+    try:
+        size_kb = float(size_kb)
+    except (TypeError, ValueError):
+        return ""
+    size_mb = size_kb / 1024
+    if size_mb < 1024:
+        return f"{size_mb:.0f} MB"
+    return f"{size_mb / 1024:.2f} GB"
+
+
+def build_file_choices(files):
+    """Build string choices and a label -> file lookup for the file dropdown.
+
+    Gradio 3.43 Dropdown choices must be plain strings, so labels carry the
+    details and the lookup state maps the selected label back to the file.
+    """
+    downloadable = get_downloadable_files(files)
+    choices = []
+    lookup = {}
+    for index, file_info in enumerate(downloadable):
+        metadata = file_info.get("metadata") or {}
+        details = [
+            str(value)
+            for value in (
+                metadata.get("format"),
+                metadata.get("quantType"),
+                metadata.get("fp"),
+                metadata.get("size"),
+            )
+            if value
+        ]
+        label = file_info.get("name") or "Unnamed file"
+        if details:
+            label += " — " + " · ".join(details)
+        size = format_file_size(file_info.get("sizeKB"))
+        if size:
+            label += f" · {size}"
+        if index == 0:
+            label += " (default)"
+        unique_label = label
+        suffix = 2
+        while unique_label in lookup:
+            unique_label = f"{label} ({suffix})"
+            suffix += 1
+        choices.append(unique_label)
+        lookup[unique_label] = file_info
+    default_value = choices[0] if choices else None
+    return choices, lookup, default_value
+
+
+def section_title(text):
+    return gr.HTML(f'<div class="civitai-section-title">{text}</div>')
 
 
 def on_ui_tabs():
@@ -454,6 +519,16 @@ def on_ui_tabs():
         gr.HTML(
             f"""
         <style>
+        .civitai-section-title {{
+            margin: 20px 0 10px;
+            padding: 0 0 5px 8px;
+            border-left: 3px solid var(--button-primary-background-fill, var(--button-primary-background, #4caf50));
+            border-bottom: 1px solid var(--border-color-primary, rgba(128, 128, 128, 0.35));
+            font-size: 1.12em;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            line-height: 1.3;
+        }}
         /* Remove the glowing border and animation from the Output area */
         #ota_textbox > .generating {{
             display: none !important;
@@ -505,7 +580,7 @@ def on_ui_tabs():
         )
         with gr.Row():
             with gr.Column(variant="panel"):
-                gr.Markdown("#### Model Selection")
+                section_title("Model Selection")
                 model_url = gr.Textbox(
                     label="Civitai Model URL or ID",
                     placeholder="e.g. 12345 or https://civitai.com/models/12345/...",
@@ -514,13 +589,21 @@ def on_ui_tabs():
                 )
                 with gr.Row():
                     check_btn = gr.Button("Check Model", variant="secondary")
-                gr.Markdown("#### Info Tools")
+                section_title("Info Tools")
                 with gr.Row():
                     check_missing_btn = gr.Button("Check models for missing info (preview, metadata)", variant="secondary")
                     check_updates_btn = gr.Button("Check for model updates", variant="secondary")
+                section_title("File / Quant")
+                file_selector = gr.Dropdown(
+                    label="Download file",
+                    choices=[],
+                    value=None,
+                    interactive=False,
+                    info="Pick a specific file when the version offers multiple formats or quants. The primary/default file is preselected.",
+                )
 
                 if getattr(_shared.opts, "civitai_enable_folder_selector", False):
-                    gr.Markdown("#### Destination Folder")
+                    section_title("Destination Folder")
                     folder_choices = get_model_folder_roots()
                     subfolders = set()
                     for folder in folder_choices:
@@ -541,7 +624,7 @@ def on_ui_tabs():
                 else:
                     save_folder = gr.State(value=AUTO_SAVE_FOLDER)
 
-                gr.Markdown("#### Download Controls")
+                section_title("Download Controls")
                 with gr.Row():
                     cancel_btn = gr.Button("Cancel", variant="stop", scale=1)
                     download_btn = gr.Button(
@@ -552,7 +635,7 @@ def on_ui_tabs():
                 output = gr.Markdown(label="Output", elem_id="ota_textbox")
 
             with gr.Column(variant="panel"):
-                gr.Markdown("#### Model Preview & Info")
+                section_title("Model Preview & Info")
                 with gr.Row():
                     preview1 = gr.Image(
                         label="Preview 1", interactive=False, height=512, fill_width=True
@@ -571,6 +654,7 @@ def on_ui_tabs():
 
         model_state = gr.State(value=None)
         preview_urls_state = gr.State(value=None)  # Store (preview1_url, preview2_url)
+        files_state = gr.State(value=None)
         gr.Markdown(
             f"<div style='text-align:center; color:gray;'>"
             f"<center><b>Civitai Model Downloader — v{VERSION} — otacoo</b></center>"
@@ -581,7 +665,7 @@ def on_ui_tabs():
         def get_first_two_preview_images(model_url):
             model_id, model_version_id = parse_civitai_model_and_version_id(model_url)
             if not model_id:
-                return None, None, None, None, "Could not parse model ID from URL or input."
+                return None, None, None, None, "Could not parse model ID from URL or input.", []
             api_key = get_civitai_api_key()
             try:
                 model_info = get_civitai_model_info(model_id, api_key=api_key)
@@ -617,16 +701,32 @@ def on_ui_tabs():
                 info_text = f"Model: {model_name}\nType: {model_type}{base_line}\nTags: {tags_str}"
                 if model_version_id:
                     info_text += f"\nVersion ID: {model_version_id}"
-                return img1, img2, model_id, model_version_id, info_text
+                files = version.get("files", []) if version else []
+                return img1, img2, model_id, model_version_id, info_text, files
             except Exception as e:
-                return None, None, None, None, f"Error checking model: {str(e)}"
+                return None, None, None, None, f"Error checking model: {str(e)}", []
 
         def check_and_update(url):
-            img1, img2, model_id, model_version_id, info_text = get_first_two_preview_images(url)
+            img1, img2, model_id, model_version_id, info_text, files = get_first_two_preview_images(url)
             state = (model_id, model_version_id) if model_id else None
             preview_urls = (img1, img2) if model_id else None
-            download_enabled = bool(model_id)
-            return img1, img2, info_text, state, preview_urls, gr.update(interactive=download_enabled)
+            file_choices, file_lookup, default_file = build_file_choices(files)
+            download_enabled = bool(model_id and file_lookup)
+            file_update = gr.update(
+                choices=file_choices,
+                value=default_file,
+                interactive=bool(file_choices),
+            )
+            return (
+                img1,
+                img2,
+                info_text,
+                state,
+                preview_urls,
+                file_update,
+                file_lookup,
+                gr.update(interactive=download_enabled),
+            )
 
         def cancel_download(state):
             cancelled = False
@@ -650,7 +750,16 @@ def on_ui_tabs():
         check_btn.click(
             fn=check_and_update,
             inputs=[model_url],
-            outputs=[preview1, preview2, info, model_state, preview_urls_state, download_btn],
+            outputs=[
+                preview1,
+                preview2,
+                info,
+                model_state,
+                preview_urls_state,
+                file_selector,
+                files_state,
+                download_btn,
+            ],
         )
         def check_missing_info_or_cancel():
             if is_running():
@@ -678,7 +787,14 @@ def on_ui_tabs():
         )
         download_btn.click(
             fn=download_model,
-            inputs=[model_state, preview_urls_state, preview_selection, save_folder],
+            inputs=[
+                model_state,
+                preview_urls_state,
+                preview_selection,
+                save_folder,
+                file_selector,
+                files_state,
+            ],
             outputs=[output],
         )
         cancel_btn.click(
