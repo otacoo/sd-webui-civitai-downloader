@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.0] - 2026-11-26
+- Add support for downloading GGUF files
+- Add option to pick quant / file type before download
+- Improve UI
+
 ## [1.3.1] - 2026-11-22
 - **Removed** LoCon and LyCORIS filtering options
   - All LoRA types will be saved in the respective LoRA folder
